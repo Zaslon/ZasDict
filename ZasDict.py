@@ -11,6 +11,83 @@ import json
 
 APP_TITLE = "ZasDict"
 
+# カスタム文字順序
+ORDER = "eaoiuhkstcnrmpfgzdbv- "
+ORDER_MAP = {ch: i for i, ch in enumerate(ORDER)}
+
+import re
+from functools import cmp_to_key
+
+# カスタム文字順序
+ORDER = "eaoiuhkstcnrmpfgzdbv- "
+ORDER_MAP = {ch: i for i, ch in enumerate(ORDER)}
+
+def preprocess(s: str):
+    """処理した文字列を返す"""
+    # 語頭と語末の '-' を削除
+    s = re.sub(r"^-+", "", s)
+    s = re.sub(r"-+$", "", s)
+    # （）、’ を削除
+    s = s.replace("（", "").replace("）", "").replace("'", "")
+    # 小文字化
+    return s.lower()
+
+def compare_forms(a: str, b: str):
+    orig_a, orig_b = a, b
+    proc_a, proc_b = preprocess(a), preprocess(b)
+
+    # 1. 処理した文字列を先頭から比較
+    for ca, cb in zip(proc_a, proc_b):
+        if ca != cb:
+            return ORDER_MAP.get(ca, 999) - ORDER_MAP.get(cb, 999)
+    # 2. 短い方を先
+    if len(proc_a) != len(proc_b):
+        return len(proc_a) - len(proc_b)
+
+    # 3. ’ の有無
+    if ("'" in orig_a) != ("'" in orig_b):
+        return -1 if "'" not in orig_a else 1
+
+    # 4. 大文字の位置
+    for ca, cb in zip(orig_a, orig_b):
+        if ca != cb:
+            if ca.isupper() and cb.islower():
+                return -1
+            if cb.isupper() and ca.islower():
+                return 1
+
+    # 5. 記号の有無
+    symbols = set("-()")
+    a_has_symbol = any(ch in symbols for ch in orig_a)
+    b_has_symbol = any(ch in symbols for ch in orig_b)
+    if a_has_symbol != b_has_symbol:
+        return -1 if not a_has_symbol else 1
+
+    # 6. '-' の位置（語末に近い方を先）
+    if "-" in orig_a or "-" in orig_b:
+        pos_a = orig_a.rfind("-") if "-" in orig_a else -1
+        pos_b = orig_b.rfind("-") if "-" in orig_b else -1
+        if pos_a != pos_b:
+            return (len(orig_a) - pos_a) - (len(orig_b) - pos_b)
+
+    # 7. 括弧の位置
+    if "（" in orig_a or "（" in orig_b:
+        pos_a = orig_a.find("（") if "（" in orig_a else 999
+        pos_b = orig_b.find("（") if "（" in orig_b else 999
+        if pos_a != pos_b:
+            return pos_a - pos_b
+        # 同じなら「）」の位置
+        pos_a = orig_a.find("）") if "）" in orig_a else 999
+        pos_b = orig_b.find("）") if "）" in orig_b else 999
+        if pos_a != pos_b:
+            return pos_a - pos_b
+
+    return 0
+
+# ソート関数
+def sort_entries(entries):
+    return sorted(entries, key=cmp_to_key(lambda a, b: compare_forms(a["entry"]["form"], b["entry"]["form"])))
+
 # --- 検索ロジック部分 ---
 def load_dictionary(json_file_path):
     with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -276,6 +353,9 @@ class DictionaryApp(QMainWindow):
         elif mode == "部分":
             results = [entry for key, entries in self.search_index.items()
                 if keyword in key for entry in entries]
+
+        # 検索結果をソートして表示
+        results = sort_entries(results)
 
         seen = set()
         for entry in results:
