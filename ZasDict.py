@@ -4,10 +4,9 @@ from PySide6.QtWidgets import (
     QDialog, QLabel, QPushButton, QSpinBox, QCheckBox, QFontComboBox, QMessageBox
 )
 from PySide6.QtGui import QAction, QFont
-from PySide6.QtCore import QSettings
-import os
-import sys
-import json
+from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
+import os, sys, json, re
+from functools import cmp_to_key
 
 APP_TITLE = "ZasDict"
 
@@ -134,6 +133,75 @@ def search_prefix(index, keyword):
             results.extend(index[key])
     return results
 
+# UI側と検索処理を分けるためのワーカクラス
+class SearchWorker(QObject):
+    finished = Signal(int, list)  # (job_id, results)
+
+    def __init__(self, index, dictionary_data):
+        super().__init__()
+        self.index = index
+        self.dictionary_data = dictionary_data
+        self.current_job_id = 0
+        self.cancelled_jobs = set()
+
+    @Slot(int, str, str, str)
+    def run_search(self, job_id, mode, scope, text):
+        # 古いジョブなら無視
+        if job_id in self.cancelled_jobs:
+            return
+
+        results = []
+
+        # --- 検索対象を制御 ---
+        if scope == "見出し語・訳語":
+            results = []
+            for entry in self.dictionary_data.get("words", []):
+                forms = []
+                form = entry.get("entry", {}).get("form", "")
+                if form:
+                    forms.append(form.lower())
+                for t in entry.get("translations", []):
+                    for f in t.get("forms", []):
+                        if f:
+                            forms.append(f.lower())
+
+                # 検索方法に応じて判定
+                if mode == "部分":
+                    if all(k in " ".join(forms) for k in text.lower().split()):
+                        results.append(entry)
+                elif mode == "前方":
+                    if any(f.startswith(text.lower()) for f in forms):
+                        results.append(entry)
+                elif mode == "後方":
+                    if any(f.endswith(text.lower()) for f in forms):
+                        results.append(entry)
+                elif mode == "完全":
+                    if text.lower() in forms:
+                        results.append(entry)
+        else:
+            filtered_index = self.index
+
+            # --- 検索方法 ---
+            if mode == "部分":   # ← self.mode ではなく mode
+                keywords = text.lower().split()
+                results = [entry for key, entries in filtered_index.items()
+                        if all(k in key for k in keywords)   # AND検索
+                        for entry in entries]
+            elif mode == "前方":
+                keyword = text.lower()
+                results = [entry for key, entries in filtered_index.items()
+                        if key.startswith(keyword) for entry in entries]
+            elif mode == "後方":
+                keyword = text.lower()
+                results = [entry for key, entries in filtered_index.items()
+                        if key.endswith(keyword) for entry in entries]
+            elif mode == "完全":
+                keyword = text.lower()
+                results = filtered_index.get(keyword, [])
+
+        results = sort_entries(results)
+        self.finished.emit(job_id, results)  # ← job_id を渡す
+
 # --- GUIアプリケーション ---
 class DictionaryApp(QMainWindow):
     def __init__(self):
@@ -165,6 +233,19 @@ class DictionaryApp(QMainWindow):
         # フォント適用
         default_font = QFont(font_family, font_size)
 
+        # スレッドとワーカーを1つだけ作成
+        self.thread = QThread()
+        self.worker = SearchWorker(self.search_index, self.dictionary_data)
+        self.worker.moveToThread(self.thread)
+        self.thread.start()
+
+        # 結果を受け取る
+        self.worker.finished.connect(self.on_search_finished)
+
+        # ジョブID管理
+        self.job_counter = 0
+        self.latest_job_id = 0
+
         # メインウィジェットとレイアウト
         main_widget = QWidget()
         main_layout = QVBoxLayout()
@@ -183,6 +264,11 @@ class DictionaryApp(QMainWindow):
         search_layout.addWidget(self.search_input)
         search_layout.addWidget(self.search_mode)
         main_layout.addLayout(search_layout)
+
+        # 検索対象選択
+        self.search_scope = QComboBox()
+        self.search_scope.addItems(["見出し語・訳語", "全文"])
+        search_layout.addWidget(self.search_scope)
 
         # 検索結果と内容表示のレイアウト
         content_layout = QHBoxLayout()
@@ -328,28 +414,31 @@ class DictionaryApp(QMainWindow):
             self.detail_view.setPlainText("\n".join(detail_lines))
 
     def update_results(self, text):
-        self.result_list.clear()
         if not text or not self.search_index:
+            self.result_list.clear()
             return
 
-        mode = self.search_mode.currentText()
-        keyword = text.lower()
-        results = []
+        self.job_counter += 1
+        job_id = self.job_counter
+        self.latest_job_id = job_id
 
-        if mode == "前方":
-            results = search_prefix(self.search_index, keyword)
-        elif mode == "後方":
-            results = [entry for key, entries in self.search_index.items()
-                       if key.endswith(keyword) for entry in entries]
-        elif mode == "完全":
-            results = self.search_index.get(keyword, [])
-        elif mode == "部分":
-            results = [entry for key, entries in self.search_index.items()
-                if keyword in key for entry in entries]
+        # Workerに検索を依頼
+        QMetaObject.invokeMethod(
+            self.worker,
+            "run_search",
+            Qt.QueuedConnection,
+            Q_ARG(int, job_id),
+            Q_ARG(str, self.search_mode.currentText()),
+            Q_ARG(str, self.search_scope.currentText()),
+            Q_ARG(str, text)
+        )
 
-        # 検索結果をソートして表示
-        results = sort_entries(results)
+    def on_search_finished(self, job_id, results):
+        # 最新ジョブのみ反映
+        if job_id != self.latest_job_id:
+            return
 
+        self.result_list.clear()
         seen = set()
         for entry in results:
             form = entry.get("entry", {}).get("form", "")
@@ -358,6 +447,9 @@ class DictionaryApp(QMainWindow):
                 seen.add(form)
 
     def closeEvent(self, event):
+        # 終了時にスレッドを安全に停止
+        self.thread.quit()
+        self.thread.wait()
         # 現在のウィンドウサイズを保存
         # ウィンドウサイズだけは環境設定画面以外から変更可能であるため、終了時に保存する
         self.settings.setValue("width", self.width())
