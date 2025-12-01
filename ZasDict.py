@@ -15,13 +15,6 @@ APP_TITLE = "ZasDict"
 ORDER = "eaoiuhkstcnrmpfgzdbv- "
 ORDER_MAP = {ch: i for i, ch in enumerate(ORDER)}
 
-import re
-from functools import cmp_to_key
-
-# カスタム文字順序
-ORDER = "eaoiuhkstcnrmpfgzdbv- "
-ORDER_MAP = {ch: i for i, ch in enumerate(ORDER)}
-
 def preprocess(s: str):
     """処理した文字列を返す"""
     # 語頭と語末の '-' を削除
