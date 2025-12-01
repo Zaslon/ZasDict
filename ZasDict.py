@@ -427,9 +427,11 @@ class DictionaryApp(QMainWindow):
         
         self.search_mode = QComboBox()
         self.search_mode.addItems(SEARCH_MODES)
+        self.search_mode.currentTextChanged.connect(self._on_search_options_changed)
         
         self.search_scope = QComboBox()
         self.search_scope.addItems(SEARCH_SCOPES)
+        self.search_scope.currentTextChanged.connect(self._on_search_options_changed)
         
         layout.addWidget(self.search_input)
         layout.addWidget(self.search_mode)
@@ -591,6 +593,12 @@ class DictionaryApp(QMainWindow):
     # ----------------------------------------------------------------
     # 検索と表示
     # ----------------------------------------------------------------
+    
+    def _on_search_options_changed(self):
+        """検索オプション（モード・スコープ）変更時の処理"""
+        text = self.search_input.text()
+        if text:
+            self.update_results(text)
     
     def update_results(self, text: str):
         """検索結果を更新"""
