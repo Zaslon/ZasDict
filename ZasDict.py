@@ -20,6 +20,8 @@ from typing import Dict, List, Set, Tuple, Optional
 import const
 from func import DictionaryLoader, SearchWorker
 
+from editor import EntryEditorDialog
+
 # ============================================================================
 # 環境設定ダイアログ
 # ============================================================================
@@ -181,11 +183,11 @@ class DictionaryApp(QMainWindow):
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
         
-        # 検索UI
-        main_layout.addLayout(self._create_search_layout())
+        # 検索UI（固定サイズ、ストレッチ0）
+        main_layout.addLayout(self._create_search_layout(), 0)
         
-        # コンテンツUI
-        main_layout.addLayout(self._create_content_layout())
+        # コンテンツUI（可変サイズ、ストレッチ1で残りの領域を使用）
+        main_layout.addLayout(self._create_content_layout(), 1)
         
         # メニューバー
         self._create_menu_bar()
@@ -197,6 +199,7 @@ class DictionaryApp(QMainWindow):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("検索語を入力...")
         self.search_input.textChanged.connect(self.update_results)
+        self.search_input.returnPressed.connect(self._on_search_enter)
         self.search_input.setFont(self.default_font)
         
         self.search_mode = QComboBox()
@@ -219,6 +222,7 @@ class DictionaryApp(QMainWindow):
         
         self.result_list = QListWidget()
         self.result_list.currentTextChanged.connect(self.show_detail)
+        self.result_list.itemDoubleClicked.connect(self._on_result_double_click)
         self.result_list.setFont(self.default_font)
         
         self.detail_view = QTextEdit()
@@ -233,6 +237,8 @@ class DictionaryApp(QMainWindow):
     def _create_menu_bar(self):
         """メニューバーを作成"""
         menu_bar = self.menuBar()
+        
+        # menu_bar.setStyleSheet("QMenuBar { border-bottom: 1px solid gray; }")
         
         # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
@@ -329,7 +335,7 @@ class DictionaryApp(QMainWindow):
         
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(self.dictionary_data, f, ensure_ascii=False, indent=2)
+                json.dump(self.dictionary_data, f, ensure_ascii=False, separators=(",", ":"))
             
             QMessageBox.information(
                 self,
@@ -400,14 +406,20 @@ class DictionaryApp(QMainWindow):
             return
         
         self.result_list.clear()
-        seen_ids = set()
+        self.result_entries = []  # インデックス順にエントリを保持
         
         for entry in results:
-            word_id = entry["entry"]["id"]
             form = entry["entry"]["form"]
-            if word_id not in seen_ids:
-                self.result_list.addItem(form)
-                seen_ids.add(word_id)
+            
+            # 同音異義語の場合は番号を付ける
+            display_form = form
+            count = sum(1 for e in self.result_entries 
+                       if e["entry"]["form"] == form)
+            if count > 0:
+                display_form = f"{form} ({count + 1})"
+            
+            self.result_list.addItem(display_form)
+            self.result_entries.append(entry)
     
     def show_detail(self, selected_text: str):
         """詳細を表示"""
@@ -415,22 +427,21 @@ class DictionaryApp(QMainWindow):
             self.detail_view.clear()
             return
         
-        # formからエントリを検索
-        entries = [
-            entry for entry in self.id_map.values()
-            if entry["entry"]["form"] == selected_text
-        ]
-        
-        if not entries:
+        if not selected_text:
+            self.detail_view.clear()
             return
         
-        entry = entries[0]
-        detail_text = self._format_entry_detail(entry)
-        self.detail_view.setPlainText(detail_text)
+        # 選択されたリストのインデックスを取得
+        current_index = self.result_list.currentRow()
+        
+        if 0 <= current_index < len(self.result_entries):
+            entry = self.result_entries[current_index]
+            detail_text = self._format_entry_detail(entry)
+            self.detail_view.setPlainText(detail_text)
     
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
-        """エントリの詳細をフォーマット"""
+        """エントリの詳細をフォーマット。すべて結合した文字列データとして出力する。"""
         lines = [f"単語: {entry['entry']['form']}"]
         
         # 訳語
@@ -473,6 +484,135 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("height", self.height())
         
         super().closeEvent(event)
+
+    # ----------------------------------------------------------------
+    # 単語登録
+    # ----------------------------------------------------------------
+
+    def _on_search_enter(self):
+        """検索欄でEnterキー押下時の処理"""
+        modifiers = QApplication.keyboardModifiers()
+        
+        # Ctrl+Enter: 新規登録
+        if modifiers == Qt.ControlModifier:
+            self._open_editor_new()
+        # Enter: 検索実行（既に実装済み）
+        else:
+            pass
+
+    def _on_result_double_click(self, item):
+        """結果リストでダブルクリック時の処理"""
+        self._open_editor_edit()
+
+    def _open_editor_new(self):
+        """新規登録用エディタを開く"""
+        if not self.dictionary_data:
+            QMessageBox.warning(
+                self,
+                "辞書未読込",
+                "先に辞書ファイルを開いてください。"
+            )
+            return
+        
+        initial_form = self.search_input.text().strip()
+        
+        dialog = EntryEditorDialog(
+            self.dictionary_data,
+            self.search_index,
+            self.id_map,
+            initial_form=initial_form,
+            parent=self
+        )
+        
+        if dialog.exec() == QDialog.Accepted:
+            entry_data = dialog.get_entry_data()
+            self._register_entry(entry_data)
+
+    def _open_editor_edit(self):
+        """編集用エディタを開く"""
+        current_row = self.result_list.currentRow()
+        
+        if current_row < 0 or current_row >= len(self.result_entries):
+            return
+        
+        # 選択されたエントリを取得
+        entry = self.result_entries[current_row]
+        
+        dialog = EntryEditorDialog(
+            self.dictionary_data,
+            self.search_index,
+            self.id_map,
+            initial_form="",
+            existing_entry=entry,
+            parent=self
+        )
+        
+        if dialog.exec() == QDialog.Accepted:
+            entry_data = dialog.get_entry_data()
+            self._update_entry(entry_data)
+
+    def _register_entry(self, entry_data: Dict):
+        """エントリを登録"""
+        entry_id = entry_data["entry"]["id"]
+        form = entry_data["entry"]["form"]
+        
+        # wordsリストに追加
+        if "words" not in self.dictionary_data:
+            self.dictionary_data["words"] = []
+        
+        self.dictionary_data["words"].append(entry_data)
+        
+        # 検索インデックスを再構築
+        self.search_index, self.id_map = DictionaryLoader.build_search_index(
+            self.dictionary_data
+        )
+        
+        # ワーカーのインデックスを更新
+        self.worker.index = self.search_index
+        self.worker.id_map = self.id_map
+        
+        QMessageBox.information(
+            self,
+            "登録完了",
+            f"「{form}」を登録しました。"
+        )
+        
+        # 検索結果を更新
+        current_text = self.search_input.text()
+        if current_text:
+            self.update_results(current_text)
+
+    def _update_entry(self, entry_data: Dict):
+        """エントリを更新"""
+        entry_id = entry_data["entry"]["id"]
+        form = entry_data["entry"]["form"]
+        
+        # 既存エントリを検索して更新
+        words = self.dictionary_data.get("words", [])
+        for i, entry in enumerate(words):
+            if entry.get("entry", {}).get("id") == entry_id:
+                self.dictionary_data["words"][i] = entry_data
+                break
+        
+        # 検索インデックスを再構築
+        self.search_index, self.id_map = DictionaryLoader.build_search_index(
+            self.dictionary_data
+        )
+        
+        # ワーカーのインデックスを更新
+        self.worker.index = self.search_index
+        self.worker.id_map = self.id_map
+        
+        QMessageBox.information(
+            self,
+            "更新完了",
+            f"「{form}」を更新しました。"
+        )
+        
+        # 検索結果を更新
+        current_text = self.search_input.text()
+        if current_text:
+            self.update_results(current_text)
 
 
 # ============================================================================
