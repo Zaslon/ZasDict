@@ -6,7 +6,7 @@ ZasDict - 辞書検索アプリケーション
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QListWidget, QTextEdit, QMenuBar, QMenu, QFileDialog,
-    QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox
+    QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
 )
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
@@ -32,7 +32,7 @@ class PreferencesDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("環境設定")
-        self.resize(400, 250)
+        self.resize(400, 300)
         
         layout = QVBoxLayout()
         
@@ -44,6 +44,9 @@ class PreferencesDialog(QDialog):
         
         # フォントサイズ
         layout.addLayout(self._create_font_size_layout(parent))
+        
+        # 自動保存
+        layout.addLayout(self._create_auto_save_layout(parent))
         
         # ボタン
         layout.addLayout(self._create_button_layout())
@@ -102,6 +105,19 @@ class PreferencesDialog(QDialog):
         
         return layout
     
+    def _create_auto_save_layout(self, parent) -> QHBoxLayout:
+        """自動保存設定レイアウト"""
+        layout = QHBoxLayout()
+        
+        self.auto_save_check = QCheckBox("自動上書き保存を有効にする")
+        if parent:
+            auto_save = parent.settings.value("auto_save", "false")
+            self.auto_save_check.setChecked(auto_save == "true")
+        
+        layout.addWidget(self.auto_save_check)
+        
+        return layout
+    
     def _create_button_layout(self) -> QHBoxLayout:
         """ボタンレイアウト"""
         layout = QHBoxLayout()
@@ -124,6 +140,7 @@ class PreferencesDialog(QDialog):
             "size": self.size_spin.value(),
             "width": self.width_spin.value(),
             "height": self.height_spin.value(),
+            "auto_save": self.auto_save_check.isChecked(),
         }
 
 
@@ -145,6 +162,8 @@ class DictionaryApp(QMainWindow):
         self.id_map = {}
         self.job_counter = 0
         self.latest_job_id = 0
+        self.has_unsaved_changes = False
+        self.current_file_path = None
         
         # 設定の読み込み
         self._load_settings()
@@ -243,7 +262,8 @@ class DictionaryApp(QMainWindow):
         # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
         file_menu.addAction(self._create_action("開く", self.open_file))
-        file_menu.addAction(self._create_action("保存", self.save_file))
+        file_menu.addAction(self._create_action("上書き保存", self.save_file))
+        file_menu.addAction(self._create_action("名前を付けて保存", self.save_as_file))
         file_menu.addAction(self._create_action("終了", self.close))
         
         # 設定メニュー
@@ -286,6 +306,10 @@ class DictionaryApp(QMainWindow):
         self.worker.index = self.search_index
         self.worker.id_map = self.id_map
         
+        # 現在のファイルパスを記憶
+        self.current_file_path = file_path
+        self.has_unsaved_changes = False
+        
         # タイトルを更新
         file_name = os.path.basename(file_path)
         self.setWindowTitle(f"{const.APP_TITLE}：{file_name}")
@@ -322,28 +346,59 @@ class DictionaryApp(QMainWindow):
             QMessageBox.critical(self, "読み込みエラー", str(e))
     
     def save_file(self):
-        """辞書ファイルを保存"""
+        """辞書ファイルを上書き保存"""
+        # 既存ファイルがあれば上書き保存
+        if self.current_file_path:
+            return self._save_to_file(self.current_file_path)
+        
+        # 新規保存
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "辞書ファイルを保存",
+            "辞書ファイルを上書き保存",
             "",
             "JSON Files (*.json)"
         )
         
         if not file_path:
-            return
+            return False
         
+        return self._save_to_file(file_path)
+    
+    def save_as_file(self):
+        """辞書ファイルを名前を付けて保存"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "辞書ファイルを名前を付けて保存",
+            "",
+            "JSON Files (*.json)"
+        )
+        if not file_path:
+            return False
+        return self._save_to_file(file_path)
+
+    def _save_to_file(self, file_path: str) -> bool:
+        """指定されたパスにファイルを保存"""
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.dictionary_data, f, ensure_ascii=False, separators=(",", ":"))
             
-            QMessageBox.information(
-                self,
-                "保存成功",
-                f"辞書ファイルを保存しました:\n{os.path.basename(file_path)}"
-            )
+            self.current_file_path = file_path
+            self.has_unsaved_changes = False
+            
+            # タイトルから「*」を削除
+            file_name = os.path.basename(file_path)
+            self.setWindowTitle(f"{const.APP_TITLE}：{file_name}")
+            
+            return True
         except Exception as e:
             QMessageBox.critical(self, "保存エラー", str(e))
+            return False
+    
+    def _auto_save_if_enabled(self):
+        """自動保存が有効な場合に保存を実行"""
+        auto_save = self.settings.value("auto_save", "false")
+        if auto_save == "true" and self.current_file_path:
+            self._save_to_file(self.current_file_path)
     
     # ----------------------------------------------------------------
     # 環境設定
@@ -369,6 +424,7 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("size", settings["size"])
         self.settings.setValue("width", settings["width"])
         self.settings.setValue("height", settings["height"])
+        self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
     
     # ----------------------------------------------------------------
     # 検索と表示
@@ -476,6 +532,27 @@ class DictionaryApp(QMainWindow):
     
     def closeEvent(self, event):
         """ウィンドウを閉じる時の処理"""
+        # 未保存の変更がある場合は確認
+        if self.has_unsaved_changes:
+            reply = QMessageBox.question(
+                self,
+                "未保存の変更",
+                "保存されていない変更があります。保存しますか？",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            
+            if reply == QMessageBox.Yes:
+                # 保存処理
+                if not self.save_file():
+                    # 保存がキャンセルされた場合は終了処理を中断
+                    event.ignore()
+                    return
+            elif reply == QMessageBox.Cancel:
+                # キャンセルの場合は終了処理を中断
+                event.ignore()
+                return
+            # No の場合は保存せずに終了
+        
         self.thread.quit()
         self.thread.wait()
         
@@ -572,6 +649,12 @@ class DictionaryApp(QMainWindow):
         # 相手方に逆方向の関連語を追加
         dialog.apply_reciprocal_relations()
         
+        # 変更フラグを立てる
+        self._mark_as_modified()
+        
+        # 自動保存
+        self._auto_save_if_enabled()
+        
         # 検索インデックスを再構築
         self.search_index, self.id_map = DictionaryLoader.build_search_index(
             self.dictionary_data
@@ -615,6 +698,12 @@ class DictionaryApp(QMainWindow):
         
         # 相手方に逆方向の関連語を追加
         dialog.apply_reciprocal_relations()
+        
+        # 変更フラグを立てる
+        self._mark_as_modified()
+        
+        # 自動保存
+        self._auto_save_if_enabled()
         
         # 検索インデックスを再構築
         self.search_index, self.id_map = DictionaryLoader.build_search_index(
@@ -668,6 +757,16 @@ class DictionaryApp(QMainWindow):
                         self.dictionary_data["words"][i]["relations"] = relations
                     
                     break
+
+    def _mark_as_modified(self):
+        """変更フラグを立て、タイトルに「*」を追加"""
+        if not self.has_unsaved_changes:
+            self.has_unsaved_changes = True
+            
+            # タイトルに「*」を追加
+            current_title = self.windowTitle()
+            if not current_title.endswith("*"):
+                self.setWindowTitle(f"{current_title}*")
 
 
 # ============================================================================
