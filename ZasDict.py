@@ -525,8 +525,7 @@ class DictionaryApp(QMainWindow):
         )
         
         if dialog.exec() == QDialog.Accepted:
-            entry_data = dialog.get_entry_data()
-            self._register_entry(entry_data)
+            self._register_entry_with_relations(dialog)
 
     def _open_editor_edit(self):
         """編集用エディタを開く"""
@@ -548,11 +547,19 @@ class DictionaryApp(QMainWindow):
         )
         
         if dialog.exec() == QDialog.Accepted:
-            entry_data = dialog.get_entry_data()
-            self._update_entry(entry_data)
+            self._update_entry_with_relations(dialog)
 
     def _register_entry(self, entry_data: Dict):
-        """エントリを登録"""
+        """エントリを登録（後方互換性のため残す）"""
+        self._register_entry_with_relations(entry_data, [])
+
+    def _register_entry_with_relations(self, dialog):
+        """エントリを登録し、相手方に逆方向の関連語を追加
+        
+        Args:
+            dialog: EntryEditorDialog インスタンス
+        """
+        entry_data = dialog.get_entry_data()
         entry_id = entry_data["entry"]["id"]
         form = entry_data["entry"]["form"]
         
@@ -561,6 +568,9 @@ class DictionaryApp(QMainWindow):
             self.dictionary_data["words"] = []
         
         self.dictionary_data["words"].append(entry_data)
+        
+        # 相手方に逆方向の関連語を追加
+        dialog.apply_reciprocal_relations()
         
         # 検索インデックスを再構築
         self.search_index, self.id_map = DictionaryLoader.build_search_index(
@@ -583,7 +593,16 @@ class DictionaryApp(QMainWindow):
             self.update_results(current_text)
 
     def _update_entry(self, entry_data: Dict):
-        """エントリを更新"""
+        """エントリを更新（後方互換性のため残す）"""
+        self._update_entry_with_relations(entry_data, [])
+
+    def _update_entry_with_relations(self, dialog):
+        """エントリを更新し、相手方に逆方向の関連語を追加
+        
+        Args:
+            dialog: EntryEditorDialog インスタンス
+        """
+        entry_data = dialog.get_entry_data()
         entry_id = entry_data["entry"]["id"]
         form = entry_data["entry"]["form"]
         
@@ -593,6 +612,9 @@ class DictionaryApp(QMainWindow):
             if entry.get("entry", {}).get("id") == entry_id:
                 self.dictionary_data["words"][i] = entry_data
                 break
+        
+        # 相手方に逆方向の関連語を追加
+        dialog.apply_reciprocal_relations()
         
         # 検索インデックスを再構築
         self.search_index, self.id_map = DictionaryLoader.build_search_index(
@@ -613,6 +635,39 @@ class DictionaryApp(QMainWindow):
         current_text = self.search_input.text()
         if current_text:
             self.update_results(current_text)
+
+    def _add_reciprocal_relations(self, source_entry_id: str, reciprocal_relations: List[Dict]):
+        """相手方に逆方向の関連語を追加"""
+        words = self.dictionary_data.get("words", [])
+        
+        for recip in reciprocal_relations:
+            target_entry_id = recip["target_entry_id"]
+            relation_to_add = recip["relation"]
+            
+            # 新規登録の場合は source_entry_id を設定
+            if relation_to_add["entry"]["id"] is None:
+                relation_to_add["entry"]["id"] = source_entry_id
+            
+            # 対象エントリを検索
+            for i, entry in enumerate(words):
+                if entry.get("entry", {}).get("id") == target_entry_id:
+                    # 既存の関連語リストを取得
+                    relations = entry.get("relations", [])
+                    
+                    # 重複チェック（同じ関係タイプと同じIDの組み合わせ）
+                    already_exists = False
+                    for existing_rel in relations:
+                        if (existing_rel.get("title") == relation_to_add["title"] and
+                            existing_rel.get("entry", {}).get("id") == relation_to_add["entry"]["id"]):
+                            already_exists = True
+                            break
+                    
+                    # 重複していなければ追加
+                    if not already_exists:
+                        relations.append(relation_to_add)
+                        self.dictionary_data["words"][i]["relations"] = relations
+                    
+                    break
 
 
 # ============================================================================

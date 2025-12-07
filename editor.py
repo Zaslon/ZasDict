@@ -77,7 +77,7 @@ class RelationWidget(QWidget):
     
     # 関係の選択肢（バリデーション用）
     VALID_RELATIONS = [
-        "同義語", "反義語", "類義語", "派生語", "複合語", "関連語"
+            "類義語","対義語","上位語","下位語","関連","参照","省略","同意"
     ]
     
     def __init__(self, dictionary_data, search_index, id_map, removable=True, parent=None):
@@ -140,10 +140,13 @@ class RelationWidget(QWidget):
             return None
         return {
             "title": self.relation_combo.currentText(),
-            "entry": {"id": self.selected_entry_id}
+            "entry": {
+                "id": self.selected_entry_id,
+                "form": self.selected_label.text()
+            }
         }
     
-    def set_data(self, relation: str, entry_id: str, form: str):
+    def set_data(self, relation: str, entry_id: int, form: str):
         """データを設定"""
         self.relation_combo.setCurrentText(relation)
         self.selected_entry_id = entry_id
@@ -256,6 +259,12 @@ class EntryEditorDialog(QDialog):
         self.initial_form = initial_form
         self.existing_entry = existing_entry  # 既存エントリ（編集時）
         self.is_edit_mode = existing_entry is not None
+
+        # 編集モードの場合は既存のIDを使用、新規の場合は生成
+        if self.is_edit_mode:
+            self.entry_id = self.existing_entry["entry"]["id"]
+        else:
+            self.entry_id = self._generate_unique_id()
         
         self.translation_widgets = []
         self.relation_widgets = []
@@ -268,6 +277,117 @@ class EntryEditorDialog(QDialog):
         # 既存データを読み込む
         if self.is_edit_mode:
             self._load_existing_data()
+
+    def apply_reciprocal_relations(self):
+        """相手方のエントリに逆方向の関連語を追加する
+        
+        このメソッドは呼び出し側（メインウィンドウなど）で実行すべき処理
+        エディタ内で辞書データを直接変更する
+        """
+        reciprocal_map = {
+            "類義語": "類義語",
+            "対義語": "対義語",
+            "上位語": "下位語",
+            "下位語": "上位語",
+            "関連": "関連",
+            "参照": "参照",
+            "省略": "省略",
+            "同意": "同意"
+        }
+        
+        current_entry_id = self.entry_id
+        current_entry_form = self.form_input.text().strip()
+        
+        for widget in self.relation_widgets:
+            data = widget.get_data()
+            if not data:
+                continue
+            
+            relation_type = data["title"]
+            target_entry_id = data["entry"]["id"]
+            
+            # 相手方のエントリを検索
+            target_entry = None
+            for entry in self.dictionary_data.get("words", []):
+                if entry.get("entry", {}).get("id") == target_entry_id:
+                    target_entry = entry
+                    break
+            
+            if not target_entry:
+                continue
+            
+            # 逆方向の関係タイプ
+            reciprocal_type = reciprocal_map.get(relation_type, "関連")
+            
+            # 逆方向の関連語を作成
+            reciprocal_relation = {
+                "title": reciprocal_type,
+                "entry": {
+                    "id": current_entry_id,
+                    "form": current_entry_form
+                }
+            }
+            
+            # 既存の関連語リストを取得
+            if "relations" not in target_entry:
+                target_entry["relations"] = []
+            
+            # 重複チェック：同じIDへの同じ関係タイプがすでに存在するか
+            already_exists = False
+            for rel in target_entry["relations"]:
+                if (rel.get("entry", {}).get("id") == current_entry_id and 
+                    rel.get("title") == reciprocal_type):
+                    already_exists = True
+                    break
+            
+            # 重複していなければ追加
+            if not already_exists:
+                target_entry["relations"].append(reciprocal_relation)
+    
+    def get_reciprocal_relations(self) -> List[Dict]:
+        """相手方に追加すべき逆方向の関連語を取得
+        
+        注意: このメソッドは参照用です。
+        実際に辞書データを更新するには apply_reciprocal_relations() を使用してください。
+        """
+        reciprocal_map = {
+            "類義語": "類義語",
+            "対義語": "対義語",
+            "上位語": "下位語",
+            "下位語": "上位語",
+            "関連": "関連",
+            "参照": "参照",
+            "省略": "省略",
+            "同意": "同意"
+        }
+        
+        reciprocal_relations = []
+        current_entry_id = self.entry_id
+        current_entry_form = self.form_input.text().strip()
+        
+        for widget in self.relation_widgets:
+            data = widget.get_data()
+            if not data:
+                continue
+            
+            relation_type = data["title"]
+            target_entry_id = data["entry"]["id"]
+            
+            # 逆方向の関係を取得
+            reciprocal_type = reciprocal_map.get(relation_type, "関連")
+            
+            reciprocal_relations.append({
+                "target_entry_id": target_entry_id,
+                "relation": {
+                    "title": reciprocal_type,
+                    "entry": {
+                        "id": current_entry_id,
+                        "form": current_entry_form
+                    }
+                }
+            })
+        
+        return reciprocal_relations
     
     def _build_ui(self):
         main_layout = QVBoxLayout()
@@ -367,11 +487,7 @@ class EntryEditorDialog(QDialog):
     
     def get_entry_data(self) -> Dict:
         """エントリデータを取得"""
-        # 編集モードの場合は既存のIDを使用、新規の場合は生成
-        if self.is_edit_mode:
-            entry_id = self.existing_entry["entry"]["id"]
-        else:
-            entry_id = self._generate_unique_id()
+        entry_id = self.entry_id
         
         # 翻訳データ
         translations = [w.get_data() for w in self.translation_widgets]
@@ -381,6 +497,15 @@ class EntryEditorDialog(QDialog):
         relations = [w.get_data() for w in self.relation_widgets]
         relations = [r for r in relations if r is not None]  # 選択されているもののみ
         
+        # 重複を除去：同じ関係タイプと同じIDの組み合わせ
+        unique_relations = []
+        seen = set()
+        for rel in relations:
+            key = (rel["title"], rel["entry"]["id"])
+            if key not in seen:
+                seen.add(key)
+                unique_relations.append(rel)
+
         # コンテンツ
         contents = []
         usage_text = self.usage_input.toPlainText().strip()
@@ -400,23 +525,25 @@ class EntryEditorDialog(QDialog):
             "tags": [],
             "contents": contents,
             "variations": [],
-            "relations": relations
+            "relations": unique_relations
         }
         
         return entry_data
     
-    def _generate_unique_id(self) -> str:
-        """一意なIDを生成"""
+    def _generate_unique_id(self) -> int:
+        """一意なIDを生成（integer型）
+            エラー時は2147483647を返す"""
         existing_ids = set()
         for entry in self.dictionary_data.get("words", []):
             entry_id = entry.get("entry", {}).get("id")
-            if entry_id:
+            if entry_id is not None:
                 existing_ids.add(entry_id)
         
-        while True:
-            new_id = str(uuid.uuid4())
-            if new_id not in existing_ids:
-                return new_id
+        # 最大IDを取得して+1
+        if existing_ids:
+            return max(existing_ids) + 1
+        else:
+            return 2147483647
     
     def _load_existing_data(self):
         """既存データを読み込む"""
@@ -460,11 +587,11 @@ class EntryEditorDialog(QDialog):
         for rel in relations:
             self._add_relation(removable=True)
             
-            rel_entry_id = rel.get("entry", {}).get("id", "")
-            rel_form = ""
+            rel_entry_id = rel.get("entry", {}).get("id")
+            rel_form = rel.get("entry", {}).get("form", "")
             
             # IDから見出し語を取得（id_mapを使用）
-            if rel_entry_id in self.id_map:
+            if not rel_form and rel_entry_id in self.id_map:
                 rel_form = self.id_map[rel_entry_id]["entry"]["form"]
             
             self.relation_widgets[-1].set_data(
