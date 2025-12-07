@@ -177,20 +177,63 @@ class WordSelectDialog(QDialog):
         self.selected_form = None
         
         self.setWindowTitle("単語を選択")
-        self.resize(600, 400)
+        self.resize(700, 400)
+        self._build_ui()
+    
+class WordSelectDialog(QDialog):
+    """単語選択ダイアログ"""
+    
+    def __init__(self, dictionary_data, search_index, id_map, parent=None):
+        super().__init__(parent)
+        self.dictionary_data = dictionary_data
+        self.search_index = search_index
+        self.id_map = id_map
+        self.selected_entry_id = None
+        self.selected_form = None
+        
+        self.setWindowTitle("単語を選択")
+        self.resize(700, 400)
         self._build_ui()
     
     def _build_ui(self):
         layout = QVBoxLayout()
         
         # 検索欄
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("検索:"))
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("検索語を入力...")
+        self.search_input.setPlaceholderText("検索語を入力（単語または訳語）...")
         self.search_input.textChanged.connect(self._update_results)
+        search_layout.addWidget(self.search_input)
         
-        # 結果リスト
-        self.result_list = QListWidget()
-        self.result_list.itemDoubleClicked.connect(self._on_double_click)
+        # 分割表示領域
+        splitter = QSplitter(Qt.Horizontal)
+        
+        # 左側: 見出し語リスト
+        left_widget = QWidget()
+        left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.addWidget(QLabel("見出し語"))
+        self.word_list = QListWidget()
+        self.word_list.currentRowChanged.connect(self._on_word_selected)
+        self.word_list.itemDoubleClicked.connect(self._on_double_click)
+        left_layout.addWidget(self.word_list)
+        left_widget.setLayout(left_layout)
+        
+        # 右側: 訳語表示
+        right_widget = QWidget()
+        right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(QLabel("訳語"))
+        self.translation_display = QTextEdit()
+        self.translation_display.setReadOnly(True)
+        right_layout.addWidget(self.translation_display)
+        right_widget.setLayout(right_layout)
+        
+        splitter.addWidget(left_widget)
+        splitter.addWidget(right_widget)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
         
         # ボタン
         button_layout = QHBoxLayout()
@@ -201,9 +244,8 @@ class WordSelectDialog(QDialog):
         button_layout.addWidget(ok_btn)
         button_layout.addWidget(cancel_btn)
         
-        layout.addWidget(QLabel("検索:"))
-        layout.addWidget(self.search_input)
-        layout.addWidget(self.result_list)
+        layout.addLayout(search_layout)
+        layout.addWidget(splitter)
         layout.addLayout(button_layout)
         
         self.setLayout(layout)
@@ -211,9 +253,54 @@ class WordSelectDialog(QDialog):
         # 初期表示（全件）
         self._update_results("")
     
+    def _get_translations_text(self, entry: Dict) -> str:
+        """エントリから訳語をテキスト形式で取得（整形済み）"""
+        translations = entry.get("translations", [])
+        if not translations:
+            return "(訳語なし)"
+        
+        lines = []
+        for trans in translations:
+            pos = trans.get("title", "")
+            forms = trans.get("forms", [])
+            if forms:
+                forms_str = ", ".join(forms)
+                if pos:
+                    lines.append(f"【{pos}】")
+                    lines.append(f"  {forms_str}")
+                else:
+                    lines.append(f"  {forms_str}")
+        
+        return "\n".join(lines) if lines else "(訳語なし)"
+    
+    def _on_word_selected(self, row: int):
+        """見出し語が選択されたときに訳語を表示"""
+        if 0 <= row < len(self.result_entries):
+            entry = self.result_entries[row]
+            translations_text = self._get_translations_text(entry)
+            self.translation_display.setPlainText(translations_text)
+    
+    def _matches_search(self, entry: Dict, text_lower: str) -> bool:
+        """エントリが検索条件にマッチするか判定（単語または訳語）"""
+        # 見出し語で検索
+        form = entry.get("entry", {}).get("form", "")
+        if form and text_lower in form.lower():
+            return True
+        
+        # 訳語で検索
+        translations = entry.get("translations", [])
+        for trans in translations:
+            forms = trans.get("forms", [])
+            for f in forms:
+                if text_lower in f.lower():
+                    return True
+        
+        return False
+    
     def _update_results(self, text: str):
         """検索結果を更新"""
-        self.result_list.clear()
+        self.word_list.clear()
+        self.translation_display.clear()
         self.result_entries = []
         
         # wordsリストを取得
@@ -226,16 +313,17 @@ class WordSelectDialog(QDialog):
             for entry in words:
                 form = entry.get("entry", {}).get("form", "")
                 if form:
-                    self.result_list.addItem(form)
+                    self.word_list.addItem(form)
                     self.result_entries.append(entry)
         else:
-            # 前方一致検索
+            # 部分一致検索（単語または訳語）
             text_lower = text.lower()
             for entry in words:
-                form = entry.get("entry", {}).get("form", "")
-                if form and form.lower().startswith(text_lower):
-                    self.result_list.addItem(form)
-                    self.result_entries.append(entry)
+                if self._matches_search(entry, text_lower):
+                    form = entry.get("entry", {}).get("form", "")
+                    if form:
+                        self.word_list.addItem(form)
+                        self.result_entries.append(entry)
     
     def _on_double_click(self):
         """ダブルクリック時"""
