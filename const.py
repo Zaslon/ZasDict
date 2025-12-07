@@ -14,5 +14,5 @@ DEFAULT_FONT_SIZE = 12
 DEFAULT_WINDOW_WIDTH = 800
 DEFAULT_WINDOW_HEIGHT = 600
 
-SEARCH_MODES = ["部分", "前方", "後方", "完全"]
+SEARCH_MODES = ["前方", "部分", "後方", "完全"]
 SEARCH_SCOPES = ["見出し語・訳語", "全文"]
