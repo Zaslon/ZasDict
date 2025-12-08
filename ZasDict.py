@@ -19,6 +19,7 @@ from typing import Dict, List, Set, Tuple, Optional
 
 import const
 from func import DictionaryLoader, SearchWorker
+from kaiomom import convert_idyer
 
 from editor import EntryEditorDialog
 
@@ -269,6 +270,7 @@ class DictionaryApp(QMainWindow):
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
+        settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
     
     def _create_action(self, text: str, slot) -> QAction:
         """アクションを作成"""
@@ -313,6 +315,11 @@ class DictionaryApp(QMainWindow):
         # タイトルを更新
         file_name = os.path.basename(file_path)
         self.setWindowTitle(f"{const.APP_TITLE}：{file_name}")
+
+    def open_idyer_converter(self):
+        """変換ダイアログを開く"""
+        dialog = DialectConverterDialog(self)
+        dialog.exec()
     
     # ----------------------------------------------------------------
     # ファイル操作
@@ -768,6 +775,76 @@ class DictionaryApp(QMainWindow):
             if not current_title.endswith("*"):
                 self.setWindowTitle(f"{current_title}*")
 
+# ============================================================================
+# 変換画面
+# ============================================================================
+
+class DialectConverterDialog(QDialog):
+    """変換ダイアログ"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("イジェール語方言変換")
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(400)
+        
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 入力部分
+        input_layout = QHBoxLayout()
+        input_label = QLabel("元単語（アクセントは大文字）:")
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("例: kirAku")
+        self.input_field.returnPressed.connect(self.convert)
+        
+        input_layout.addWidget(input_label)
+        input_layout.addWidget(self.input_field)
+        
+        # 変換ボタン
+        convert_button = QPushButton("変換")
+        convert_button.clicked.connect(self.convert)
+        
+        # 結果表示部分
+        self.result_display = QTextEdit()
+        self.result_display.setReadOnly(True)
+        self.result_display.setPlaceholderText("変換結果がここに表示されます")
+        
+        # 閉じるボタン
+        close_button = QPushButton("閉じる")
+        close_button.clicked.connect(self.accept)
+        
+        # レイアウトに追加
+        layout.addLayout(input_layout)
+        layout.addWidget(convert_button)
+        layout.addWidget(QLabel("変換結果:"))
+        layout.addWidget(self.result_display)
+        layout.addWidget(close_button)
+        
+        self.setLayout(layout)
+
+    def convert(self):
+        """変換を実行"""
+        word = self.input_field.text().strip()
+        if not word:
+            self.result_display.setPlainText("単語を入力してください")
+            return
+        
+        try:
+            result = convert_idyer(word)
+            
+            # 結果を整形して表示
+            output = f"""i.s 旗: {result['sekore']}
+i.t 資: {result['titauini']}
+i.k 探: {result['kaiko']}
+i.a 教: {result['arzafire']}"""
+            
+            self.result_display.setPlainText(output)
+            
+        except Exception as e:
+            self.result_display.setPlainText(f"エラーが発生しました: {str(e)}")
 
 # ============================================================================
 # エントリーポイント
