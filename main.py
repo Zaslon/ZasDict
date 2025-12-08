@@ -20,7 +20,7 @@ from typing import Dict, List, Set, Tuple, Optional
 import const
 from func import DictionaryLoader, SearchWorker
 from kaiomom import convert_idyer
-
+from ipa import ipaToSpell
 from editor import EntryEditorDialog
 
 # ============================================================================
@@ -271,6 +271,7 @@ class DictionaryApp(QMainWindow):
         settings_menu = menu_bar.addMenu("設定")
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
         settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
+        settings_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
     
     def _create_action(self, text: str, slot) -> QAction:
         """アクションを作成"""
@@ -316,11 +317,6 @@ class DictionaryApp(QMainWindow):
         file_name = os.path.basename(file_path)
         self.setWindowTitle(f"{const.APP_TITLE}：{file_name}")
 
-    def open_idyer_converter(self):
-        """変換ダイアログを開く"""
-        dialog = DialectConverterDialog(self)
-        dialog.exec()
-    
     # ----------------------------------------------------------------
     # ファイル操作
     # ----------------------------------------------------------------
@@ -432,7 +428,17 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("width", settings["width"])
         self.settings.setValue("height", settings["height"])
         self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
-    
+
+    def open_idyer_converter(self):
+        """変換ダイアログを開く"""
+        dialog = DialectConverterDialog(self)
+        dialog.exec()
+
+    def open_ipa_converter(self):
+        """IPA変換ダイアログを開く"""
+        dialog = IPAConverterDialog(self)
+        dialog.exec()
+
     # ----------------------------------------------------------------
     # 検索と表示
     # ----------------------------------------------------------------
@@ -784,7 +790,7 @@ class DialectConverterDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("イジェール語方言変換")
+        self.setWindowTitle("変換")
         self.setMinimumWidth(500)
         self.setMinimumHeight(400)
         
@@ -797,7 +803,7 @@ class DialectConverterDialog(QDialog):
         input_layout = QHBoxLayout()
         input_label = QLabel("元単語（アクセントは大文字）:")
         self.input_field = QLineEdit()
-        self.input_field.setPlaceholderText("例: kirAku")
+        self.input_field.setPlaceholderText("例: nyUryoku")
         self.input_field.returnPressed.connect(self.convert)
         
         input_layout.addWidget(input_label)
@@ -845,6 +851,98 @@ i.a 教: {result['arzafire']}"""
             
         except Exception as e:
             self.result_display.setPlainText(f"エラーが発生しました: {str(e)}")
+
+# ============================================================================
+# IPA画面
+# ============================================================================
+
+class IPAConverterDialog(QDialog):
+    """IPA変換ダイアログ"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("IPA to Spell Converter")
+        self.setMinimumSize(600, 400)
+        self.init_ui()
+    
+    def init_ui(self):
+        """UIの初期化"""
+        layout = QVBoxLayout()
+        
+        # 入力セクション
+        input_label = QLabel("IPA入力:")
+        input_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(input_label)
+        
+        self.input_text = QLineEdit()
+        self.input_text.setPlaceholderText("IPA記号を入力してください（例: ˈhɛloʊ）")
+        self.input_text.setMaximumHeight(100)
+        layout.addWidget(self.input_text)
+        
+        # 変換ボタン
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.convert_button = QPushButton("変換")
+        self.convert_button.clicked.connect(self.convert_ipa)
+        self.convert_button.setMinimumWidth(100)
+        button_layout.addWidget(self.convert_button)
+        
+        self.clear_button = QPushButton("クリア")
+        self.clear_button.clicked.connect(self.clear_all)
+        self.clear_button.setMinimumWidth(100)
+        button_layout.addWidget(self.clear_button)
+        
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+        
+        # 出力セクション
+        output_label = QLabel("変換結果:")
+        output_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(output_label)
+        
+        self.output_text = QTextEdit()
+        self.output_text.setReadOnly(True)
+        self.output_text.setPlaceholderText("変換結果がここに表示されます")
+        layout.addWidget(self.output_text)
+        
+        # 閉じるボタン
+        close_layout = QHBoxLayout()
+        close_layout.addStretch()
+        
+        self.close_button = QPushButton("閉じる")
+        self.close_button.clicked.connect(self.accept)
+        self.close_button.setMinimumWidth(100)
+        close_layout.addWidget(self.close_button)
+        
+        layout.addLayout(close_layout)
+        
+        self.setLayout(layout)
+    
+    def convert_ipa(self):
+        """IPA変換を実行"""
+        input_text = self.input_text.toPlainText().strip()
+        
+        if not input_text:
+            self.output_text.setPlainText("入力がありません")
+            return
+        
+        # 各行を変換
+        lines = input_text.split('\n')
+        results = []
+        
+        for line in lines:
+            if line.strip():
+                converted = ipaToSpell(line.strip())
+                # results.append(f"元のIPA: {line.strip()}")
+                results.append(f"{converted}")
+        
+        self.output_text.setPlainText('\n'.join(results))
+    
+    def clear_all(self):
+        """すべてのテキストをクリア"""
+        self.input_text.clear()
+        self.output_text.clear()
 
 # ============================================================================
 # エントリーポイント
