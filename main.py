@@ -244,6 +244,8 @@ class DictionaryApp(QMainWindow):
         self.result_list.currentTextChanged.connect(self.show_detail)
         self.result_list.itemDoubleClicked.connect(self._on_result_double_click)
         self.result_list.setFont(self.default_font)
+        self.result_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.result_list.customContextMenuRequested.connect(self._on_result_right_click)
         
         self.detail_view = QTextEdit()
         self.detail_view.setReadOnly(True)
@@ -251,7 +253,7 @@ class DictionaryApp(QMainWindow):
         
         layout.addWidget(self.result_list, 1)
         layout.addWidget(self.detail_view, 2)
-        
+
         return layout
     
     def _create_menu_bar(self):
@@ -581,10 +583,6 @@ class DictionaryApp(QMainWindow):
         
         super().closeEvent(event)
 
-    # ----------------------------------------------------------------
-    # 単語登録
-    # ----------------------------------------------------------------
-
     def _on_search_enter(self):
         """検索欄でEnterキー押下時の処理"""
         modifiers = QApplication.keyboardModifiers()
@@ -599,6 +597,27 @@ class DictionaryApp(QMainWindow):
     def _on_result_double_click(self, item):
         """結果リストでダブルクリック時の処理"""
         self._open_editor_edit()
+
+    def _on_result_right_click(self, position):
+        """リスト項目の右クリックメニューを表示"""
+        item = self.result_list.itemAt(position)
+        if item is None:
+            return
+        
+        menu = QMenu(self)
+        
+        edit_action = menu.addAction("編集")
+        # duplicate_action = menu.addAction("複製")
+        delete_action = menu.addAction("削除")
+        
+        action = menu.exec(self.result_list.mapToGlobal(position))
+        
+        if action == edit_action:
+            self._open_editor_edit()
+        # elif action == duplicate_action:
+        #     self._open_editor_duplicate()
+        elif action == delete_action:
+            self._delete_entry()
 
     def _open_editor_new(self):
         """新規登録用エディタを開く"""
@@ -646,6 +665,10 @@ class DictionaryApp(QMainWindow):
         dialog.setWindowModality(Qt.WindowModal)
         dialog.accepted.connect(lambda: self._update_entry_with_relations(dialog))
         dialog.show()
+
+    # ----------------------------------------------------------------
+    # 単語登録
+    # ----------------------------------------------------------------
 
     def _register_entry_with_relations(self, dialog):
         """エントリを登録し、相手方に逆方向の関連語を追加
