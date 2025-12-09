@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from typing import Dict, List, Optional
-import uuid
 
+from func import TextProcessor
 
 class TranslationWidget(QWidget):
     """品詞と訳語のセット"""
@@ -164,22 +164,6 @@ class RelationWidget(QWidget):
         self.selected_entry_id = entry_id
         self.selected_label.setText(form)
 
-
-class WordSelectDialog(QDialog):
-    """単語選択ダイアログ"""
-    
-    def __init__(self, dictionary_data, search_index, id_map, parent=None):
-        super().__init__(parent)
-        self.dictionary_data = dictionary_data
-        self.search_index = search_index
-        self.id_map = id_map
-        self.selected_entry_id = None
-        self.selected_form = None
-        
-        self.setWindowTitle("単語を選択")
-        self.resize(700, 400)
-        self._build_ui()
-    
 class WordSelectDialog(QDialog):
     """単語選択ダイアログ"""
     
@@ -313,17 +297,22 @@ class WordSelectDialog(QDialog):
             for entry in words:
                 form = entry.get("entry", {}).get("form", "")
                 if form:
-                    self.word_list.addItem(form)
                     self.result_entries.append(entry)
         else:
             # 部分一致検索（単語または訳語）
             text_lower = text.lower()
             for entry in words:
                 if self._matches_search(entry, text_lower):
-                    form = entry.get("entry", {}).get("form", "")
-                    if form:
-                        self.word_list.addItem(form)
-                        self.result_entries.append(entry)
+                    self.result_entries.append(entry)
+        
+        # エントリをソート
+        self.result_entries = TextProcessor.sort_entries(self.result_entries)
+        
+        # ソート済みエントリをリストに追加
+        for entry in self.result_entries:
+            form = entry.get("entry", {}).get("form", "")
+            if form:
+                self.word_list.addItem(form)
     
     def _on_double_click(self):
         """ダブルクリック時"""
@@ -337,7 +326,7 @@ class WordSelectDialog(QDialog):
     
     def _select_current(self):
         """現在選択中の項目を取得"""
-        current_row = self.result_list.currentRow()
+        current_row = self.word_list.currentRow()
         if 0 <= current_row < len(self.result_entries):
             entry = self.result_entries[current_row]
             self.selected_entry_id = entry["entry"]["id"]
