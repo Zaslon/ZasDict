@@ -4,7 +4,7 @@ ZasDict - 辞書検索アプリケーション
 """
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QWidgetAction, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QLineEdit, QComboBox, QListWidget, QTextEdit, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
 )
@@ -272,7 +272,13 @@ class DictionaryApp(QMainWindow):
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
         settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
         settings_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
-    
+
+        # 右端に表示したい文字列
+        label = QLabel("Hello World")
+        label.setStyleSheet("padding-right: 10px;")  # 少し余白をつけると綺麗
+
+        menu_bar.setCornerWidget(label, Qt.TopRightCorner)
+
     def _create_action(self, text: str, slot) -> QAction:
         """アクションを作成"""
         action = QAction(text, self)
@@ -432,12 +438,12 @@ class DictionaryApp(QMainWindow):
     def open_idyer_converter(self):
         """変換ダイアログを開く"""
         dialog = DialectConverterDialog(self)
-        dialog.exec()
+        dialog.show()
 
     def open_ipa_converter(self):
         """IPA変換ダイアログを開く"""
         dialog = IPAConverterDialog(self)
-        dialog.exec()
+        dialog.show()
 
     # ----------------------------------------------------------------
     # 検索と表示
@@ -614,8 +620,9 @@ class DictionaryApp(QMainWindow):
             parent=self
         )
         
-        if dialog.exec() == QDialog.Accepted:
-            self._register_entry_with_relations(dialog)
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.accepted.connect(lambda: self._register_entry_with_relations(dialog))
+        dialog.show()
 
     def _open_editor_edit(self):
         """編集用エディタを開く"""
@@ -635,13 +642,10 @@ class DictionaryApp(QMainWindow):
             existing_entry=entry,
             parent=self
         )
-        
-        if dialog.exec() == QDialog.Accepted:
-            self._update_entry_with_relations(dialog)
 
-    def _register_entry(self, entry_data: Dict):
-        """エントリを登録（後方互換性のため残す）"""
-        self._register_entry_with_relations(entry_data, [])
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.accepted.connect(lambda: self._update_entry_with_relations(dialog))
+        dialog.show()
 
     def _register_entry_with_relations(self, dialog):
         """エントリを登録し、相手方に逆方向の関連語を追加
@@ -687,10 +691,6 @@ class DictionaryApp(QMainWindow):
         current_text = self.search_input.text()
         if current_text:
             self.update_results(current_text)
-
-    def _update_entry(self, entry_data: Dict):
-        """エントリを更新（後方互換性のため残す）"""
-        self._update_entry_with_relations(entry_data, [])
 
     def _update_entry_with_relations(self, dialog):
         """エントリを更新し、相手方に逆方向の関連語を追加
