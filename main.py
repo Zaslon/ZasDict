@@ -45,6 +45,12 @@ class PreferencesDialog(QDialog):
         
         # フォントサイズ
         layout.addLayout(self._create_font_size_layout(parent))
+
+        # UIフォント
+        layout.addLayout(self._create_ui_font_layout(parent))
+        
+        # UIフォントサイズ
+        layout.addLayout(self._create_ui_font_size_layout(parent))
         
         # 自動保存
         layout.addLayout(self._create_auto_save_layout(parent))
@@ -106,6 +112,39 @@ class PreferencesDialog(QDialog):
         
         return layout
     
+    def _create_ui_font_layout(self, parent) -> QHBoxLayout:
+        """UIフォント設定レイアウト"""
+        layout = QHBoxLayout()
+        
+        self.ui_font_combo = QFontComboBox()
+        if parent:
+            self.ui_font_combo.setCurrentFont(parent.font())
+        
+        layout.addWidget(QLabel("UIフォント:"))
+        layout.addWidget(self.ui_font_combo)
+        
+        return layout
+    
+    def _create_ui_font_size_layout(self, parent) -> QHBoxLayout:
+        """UIフォントサイズ設定レイアウト"""
+        layout = QHBoxLayout()
+        
+        self.ui_font_size_spin = QSpinBox()
+        self.ui_font_size_spin.setRange(8, 48)
+        
+        current_size = const.DEFAULT_FONT_SIZE
+        if parent:
+            font_size = parent.font().pointSize()
+            if font_size > 0:
+                current_size = font_size
+        
+        self.ui_font_size_spin.setValue(current_size)
+        
+        layout.addWidget(QLabel("UIフォントサイズ:"))
+        layout.addWidget(self.ui_font_size_spin)
+        
+        return layout
+    
     def _create_auto_save_layout(self, parent) -> QHBoxLayout:
         """自動保存設定レイアウト"""
         layout = QHBoxLayout()
@@ -138,7 +177,9 @@ class PreferencesDialog(QDialog):
         """設定値を取得"""
         return {
             "font": self.font_combo.currentFont().family(),
+            "ui_font": self.ui_font_combo.currentFont().family(),
             "size": self.size_spin.value(),
+            "ui_font_size": self.ui_font_size_spin.value(),
             "width": self.width_spin.value(),
             "height": self.height_spin.value(),
             "auto_save": self.auto_save_check.isChecked(),
@@ -423,8 +464,10 @@ class DictionaryApp(QMainWindow):
         
         settings = dialog.get_settings()
         font = QFont(settings["font"], settings["size"])
+        ui_font = QFont(settings["ui_font"], settings["ui_font_size"])
         
         # フォントとサイズを適用
+        QApplication.instance().setFont(ui_font)
         self.result_list.setFont(font)
         self.detail_view.setFont(font)
         self.search_input.setFont(font)
@@ -435,6 +478,8 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("size", settings["size"])
         self.settings.setValue("width", settings["width"])
         self.settings.setValue("height", settings["height"])
+        self.settings.setValue("ui_font", settings["ui_font"])
+        self.settings.setValue("ui_font_size", settings["ui_font_size"])
         self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
 
     def open_idyer_converter(self):
