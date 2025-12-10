@@ -761,6 +761,81 @@ class DictionaryApp(QMainWindow):
         if current_text:
             self.update_results(current_text)
 
+    def _delete_entry(self):
+        """選択中のエントリを削除"""
+        current_row = self.result_list.currentRow()
+        
+        if current_row < 0 or current_row >= len(self.result_entries):
+            QMessageBox.warning(
+                self,
+                "エントリ未選択",
+                "削除するエントリを選択してください。"
+            )
+            return
+        
+        # 選択されたエントリを取得
+        entry = self.result_entries[current_row]
+        entry_id = entry.get("entry", {}).get("id")
+        form = entry.get("entry", {}).get("form", "")
+        
+        # 確認ダイアログ
+        reply = QMessageBox.question(
+            self,
+            "エントリの削除",
+            f"「{form}」を削除しますか？\n\n他のエントリの関連語からも削除されます。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # wordsリストから削除
+        words = self.dictionary_data.get("words", [])
+        self.dictionary_data["words"] = [
+            e for e in words 
+            if e.get("entry", {}).get("id") != entry_id
+        ]
+        
+        # 他のエントリの関連語からも削除
+        for word_entry in self.dictionary_data.get("words", []):
+            relations = word_entry.get("relations", [])
+            word_entry["relations"] = [
+                rel for rel in relations
+                if rel.get("entry", {}).get("id") != entry_id
+            ]
+        
+        # 変更フラグを立てる
+        self._mark_as_modified()
+        
+        # 自動保存
+        self._auto_save_if_enabled()
+        
+        # 検索インデックスを再構築
+        self.search_index, self.id_map = DictionaryLoader.build_search_index(
+            self.dictionary_data
+        )
+        
+        # ワーカーのインデックスを更新
+        self.worker.index = self.search_index
+        self.worker.id_map = self.id_map
+        
+        QMessageBox.information(
+            self,
+            "削除完了",
+            f"「{form}」を削除しました。"
+        )
+        
+        # 検索結果を更新
+        current_text = self.search_input.text()
+        if current_text:
+            self.update_results(current_text)
+        else:
+            # 検索テキストがない場合は結果をクリア
+            self.result_list.clear()
+            self.detail_view.clear()
+            self.result_entries = []
+
     def _add_reciprocal_relations(self, source_entry_id: str, reciprocal_relations: List[Dict]):
         """相手方に逆方向の関連語を追加"""
         words = self.dictionary_data.get("words", [])

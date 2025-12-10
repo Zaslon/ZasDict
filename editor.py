@@ -510,12 +510,14 @@ class EntryEditorDialog(QDialog):
         scroll_layout.addWidget(QLabel("語法:"))
         self.usage_input = QTextEdit()
         self.usage_input.setMaximumHeight(80)
+        self.usage_input.setTabChangesFocus(True)
         scroll_layout.addWidget(self.usage_input)
         
         # 語源
         scroll_layout.addWidget(QLabel("語源:"))
         self.etymology_input = QTextEdit()
         self.etymology_input.setMaximumHeight(80)
+        self.etymology_input.setTabChangesFocus(True)
         scroll_layout.addWidget(self.etymology_input)
         
         # 関連語
