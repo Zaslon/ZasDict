@@ -623,7 +623,7 @@ class EntryEditorDialog(QDialog):
     
     def _generate_unique_id(self) -> int:
         """一意なIDを生成（integer型）
-            エラー時は2147483647を返す"""
+            エラー時は最大値の2147483647を返すことで、他のエントリを破壊しないように処置する。"""
         existing_ids = set()
         for entry in self.dictionary_data.get("words", []):
             entry_id = entry.get("entry", {}).get("id")
