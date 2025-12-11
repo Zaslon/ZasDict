@@ -322,6 +322,7 @@ class DictionaryApp(QMainWindow):
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
+        settings_menu.addAction(self._create_action("辞書依存設定", self.open_dictionary_settings))
         settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
         settings_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
 
@@ -501,6 +502,41 @@ class DictionaryApp(QMainWindow):
         """IPA変換ダイアログを開く"""
         dialog = IPAConverterDialog(self)
         dialog.show()
+    
+    def open_dictionary_settings(self):
+        """辞書依存設定ダイアログを開く"""
+        if not self.dictionary_data:
+            QMessageBox.warning(
+                self,
+                "辞書未読込",
+                "先に辞書ファイルを開いてください。"
+            )
+            return
+        
+        dialog = DictionarySettingsDialog(self.dictionary_data, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        
+        # 設定を反映
+        punctuations = dialog.get_punctuations()
+        
+        # zpdicOnlineセクションがなければ作成
+        if "zpdicOnline" not in self.dictionary_data:
+            self.dictionary_data["zpdicOnline"] = {}
+        
+        self.dictionary_data["zpdicOnline"]["punctuations"] = punctuations
+        
+        # 変更フラグを立てる
+        self._mark_as_modified()
+        
+        # 自動保存
+        self._auto_save_if_enabled()
+        
+        QMessageBox.information(
+            self,
+            "設定完了",
+            f"区切り文字を設定しました: {''.join(punctuations)}"
+        )
 
     # ----------------------------------------------------------------
     # 検索と表示
@@ -1109,6 +1145,67 @@ class IPAConverterDialog(QDialog):
         self.input_text.clear()
         self.output_text.clear()
 
+# ============================================================================
+# 辞書依存設定画面
+# ============================================================================
+
+class DictionarySettingsDialog(QDialog):
+    """辞書依存設定ダイアログ"""
+    
+    def __init__(self, dictionary_data: Dict, parent=None):
+        super().__init__(parent)
+        self.dictionary_data = dictionary_data
+        self.setWindowTitle("辞書依存設定")
+        self.resize(500, 300)
+        
+        layout = QVBoxLayout()
+        
+        # 説明ラベル
+        info_label = QLabel("訳語の区切り文字を設定します（複数指定可）")
+        layout.addWidget(info_label)
+        
+        # 区切り文字入力
+        punctuation_layout = QHBoxLayout()
+        punctuation_label = QLabel("区切り文字:")
+        self.punctuation_edit = QLineEdit()
+        
+        # 現在の設定を読み込み
+        current_punctuations = dictionary_data.get("zpdicOnline", {}).get("punctuations", [","])
+        self.punctuation_edit.setText("".join(current_punctuations))
+        self.punctuation_edit.setPlaceholderText("例: ,/・")
+        
+        punctuation_layout.addWidget(punctuation_label)
+        punctuation_layout.addWidget(self.punctuation_edit)
+        layout.addLayout(punctuation_layout)
+        
+        # 使用例
+        example_label = QLabel("使用例: 「apple, orange / banana・grape」\n→ 各区切り文字で分割されます")
+        example_label.setStyleSheet("color: gray; font-size: 10pt;")
+        layout.addWidget(example_label)
+        
+        layout.addStretch()
+        
+        # ボタン
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("OK")
+        cancel_button = QPushButton("キャンセル")
+        
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+    
+    def get_punctuations(self) -> List[str]:
+        """設定された区切り文字をリストで取得"""
+        text = self.punctuation_edit.text().strip()
+        if not text:
+            return [","]  # デフォルト値
+        return list(text)  # 各文字をリストの要素に
+    
 # ============================================================================
 # エントリーポイント
 # ============================================================================
