@@ -519,12 +519,14 @@ class DictionaryApp(QMainWindow):
         
         # 設定を反映
         punctuations = dialog.get_punctuations()
+        ignored_pattern = dialog.get_ignored_pattern()
         
         # zpdicOnlineセクションがなければ作成
         if "zpdicOnline" not in self.dictionary_data:
             self.dictionary_data["zpdicOnline"] = {}
         
         self.dictionary_data["zpdicOnline"]["punctuations"] = punctuations
+        self.dictionary_data["zpdicOnline"]["ignoredPattern"] = ignored_pattern
         
         # 変更フラグを立てる
         self._mark_as_modified()
@@ -532,10 +534,17 @@ class DictionaryApp(QMainWindow):
         # 自動保存
         self._auto_save_if_enabled()
         
+        # 検索インデックスを再構築（ignoredPatternが検索に影響する場合）
+        self.search_index, self.id_map = DictionaryLoader.build_search_index(
+            self.dictionary_data
+        )
+        self.worker.index = self.search_index
+        self.worker.id_map = self.id_map
+        
         QMessageBox.information(
             self,
             "設定完了",
-            f"区切り文字を設定しました: {''.join(punctuations)}"
+            f"設定を更新しました:\n区切り文字: {''.join(punctuations)}\n無視パターン: {ignored_pattern if ignored_pattern else '(なし)'}"
         )
 
     # ----------------------------------------------------------------
@@ -1156,11 +1165,15 @@ class DictionarySettingsDialog(QDialog):
         super().__init__(parent)
         self.dictionary_data = dictionary_data
         self.setWindowTitle("辞書依存設定")
-        self.resize(500, 300)
+        self.resize(500, 400)
         
         layout = QVBoxLayout()
         
-        # 説明ラベル
+        # === 区切り文字設定 ===
+        punctuation_group_label = QLabel("【訳語の区切り文字】")
+        punctuation_group_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(punctuation_group_label)
+        
         info_label = QLabel("訳語の区切り文字を設定します（複数指定可）")
         layout.addWidget(info_label)
         
@@ -1182,6 +1195,36 @@ class DictionarySettingsDialog(QDialog):
         example_label = QLabel("使用例: 「apple, orange / banana・grape」\n→ 各区切り文字で分割されます")
         example_label.setStyleSheet("color: gray; font-size: 10pt;")
         layout.addWidget(example_label)
+        
+        # スペーサー
+        layout.addSpacing(20)
+        
+        # === 無視パターン設定 ===
+        ignored_group_label = QLabel("【検索時に無視するパターン】")
+        ignored_group_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(ignored_group_label)
+        
+        ignored_info_label = QLabel("検索時に無視する正規表現パターンを設定します")
+        layout.addWidget(ignored_info_label)
+        
+        # 無視パターン入力
+        ignored_layout = QHBoxLayout()
+        ignored_label = QLabel("無視パターン:")
+        self.ignored_pattern_edit = QLineEdit()
+        
+        # 現在の設定を読み込み
+        current_ignored = dictionary_data.get("zpdicOnline", {}).get("ignoredPattern", "")
+        self.ignored_pattern_edit.setText(current_ignored)
+        self.ignored_pattern_edit.setPlaceholderText("例: [\\*\\^]")
+        
+        ignored_layout.addWidget(ignored_label)
+        ignored_layout.addWidget(self.ignored_pattern_edit)
+        layout.addLayout(ignored_layout)
+        
+        # 使用例
+        ignored_example_label = QLabel("使用例: 「[\\*\\^]」 → アスタリスクやキャレットを無視\n正規表現の特殊文字は \\ でエスケープしてください")
+        ignored_example_label.setStyleSheet("color: gray; font-size: 10pt;")
+        layout.addWidget(ignored_example_label)
         
         layout.addStretch()
         
@@ -1205,6 +1248,10 @@ class DictionarySettingsDialog(QDialog):
         if not text:
             return [","]  # デフォルト値
         return list(text)  # 各文字をリストの要素に
+    
+    def get_ignored_pattern(self) -> str:
+        """設定された無視パターンを取得"""
+        return self.ignored_pattern_edit.text().strip()
     
 # ============================================================================
 # エントリーポイント
