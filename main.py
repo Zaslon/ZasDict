@@ -210,14 +210,16 @@ class DictionaryApp(QMainWindow):
         # 設定の読み込み
         self._load_settings()
         
+        # 前回の辞書ファイルを読み込み
+        self._load_last_dictionary()
+
         # 検索ワーカーの初期化
+        # 辞書ファイルの読み込み後に呼び出すこと
         self._init_search_worker()
         
         # UIの構築
         self._build_ui()
         
-        # 前回の辞書ファイルを読み込み
-        self._load_last_dictionary()
     
     def _load_settings(self):
         """設定を読み込む"""
@@ -238,7 +240,7 @@ class DictionaryApp(QMainWindow):
     def _init_search_worker(self):
         """検索ワーカーを初期化"""
         self.thread = QThread()
-        self.worker = SearchWorker(self.search_index, self.id_map)
+        self.worker = SearchWorker(self.search_index, self.id_map, self.dictionary_data)
         self.worker.moveToThread(self.thread)
         self.thread.start()
         self.worker.finished.connect(self.on_search_finished)
@@ -361,9 +363,10 @@ class DictionaryApp(QMainWindow):
             self.dictionary_data
         )
         
-        # ワーカーのインデックスを更新
-        self.worker.index = self.search_index
-        self.worker.id_map = self.id_map
+        # ワーカーが存在する場合はインデックスを更新
+        if hasattr(self, 'worker'):
+            self.worker.index = self.search_index
+            self.worker.id_map = self.id_map
         
         # 現在のファイルパスを記憶
         self.current_file_path = file_path

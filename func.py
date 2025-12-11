@@ -172,10 +172,11 @@ class SearchWorker(QObject):
     
     finished = Signal(int, list)
     
-    def __init__(self, index: Dict[str, Set[str]], id_map: Dict[str, Dict]):
+    def __init__(self, index: Dict[str, Set[str]], id_map: Dict[str, Dict], dictionary_data: Dict):
         super().__init__()
         self.index = index
         self.id_map = id_map
+        self.dictionary_data = dictionary_data
     
     @Slot(int, str, str, str)
     def run_search(self, job_id: int, mode: str, scope: str, text: str):
@@ -192,6 +193,14 @@ class SearchWorker(QObject):
         final_results = TextProcessor.sort_entries(final_results)
         self.finished.emit(job_id, final_results)
     
+    def normalize_for_search(self, text: str) -> str:
+        # ignoredPattern にマッチする部分を削除
+        ignored_pattern = self.dictionary_data["zpdicOnline"]["ignoredPattern"]
+        ignored_re = re.compile(ignored_pattern)
+        cleaned = ignored_re.sub("", text)
+
+        return cleaned
+
     def _search_headword_translation(self, keyword: str, mode: str) -> Set[str]:
         """見出し語・訳語での検索"""
         results = set()
@@ -218,16 +227,15 @@ class SearchWorker(QObject):
         
         return results
     
-    @staticmethod
-    def _match(forms: List[str], keyword: str, mode: str) -> bool:
+    def _match(self, forms: List[str], keyword: str, mode: str) -> bool:
         """マッチング判定"""
         if mode == "部分":
             text = " ".join(forms)
             return all(k in text for k in keyword.split())
         elif mode == "前方":
-            return any(f.startswith(keyword) for f in forms)
+            return any(self.normalize_for_search(f).startswith(keyword) for f in forms)
         elif mode == "後方":
-            return any(f.endswith(keyword) for f in forms)
+            return any(self.normalize_for_search(f).endswith(keyword) for f in forms)
         elif mode == "完全":
             return keyword in forms
         return False
