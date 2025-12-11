@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont
 from typing import Dict, List, Optional
 
 from func import TextProcessor
+import re
 
 class TranslationWidget(QWidget):
     """品詞と訳語のセット"""
@@ -39,6 +40,7 @@ class TranslationWidget(QWidget):
     def __init__(self, removable=True, parent=None):
         super().__init__(parent)
         self.removable = removable
+        self.parent = parent
         self._build_ui()
     
     def _build_ui(self):
@@ -71,9 +73,16 @@ class TranslationWidget(QWidget):
     
     def get_data(self) -> Dict:
         """データを取得"""
+        puncts = self.parent.dictionary_data["zpdicOnline"]["punctuations"]
+        pattern = "[" + "".join(re.escape(p) for p in puncts) + "]"
+
         return {
             "title": self.pos_combo.currentText(),
-            "forms": [f.strip() for f in self.translation_input.text().split(",") if f.strip()]
+            "forms": [
+                f.strip()
+                for f in re.split(pattern, self.translation_input.text())
+                if f.strip()
+            ]
         }
     
     def set_data(self, pos: str, forms: List[str]):
