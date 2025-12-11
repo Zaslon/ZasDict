@@ -289,6 +289,7 @@ class DictionaryApp(QMainWindow):
         
         self.result_list = QListWidget()
         self.result_list.currentTextChanged.connect(self.show_detail)
+        self.result_list.itemActivated.connect(self._on_result_enter)
         self.result_list.itemDoubleClicked.connect(self._on_result_double_click)
         self.result_list.setFont(self.default_font)
         self.result_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -641,9 +642,21 @@ class DictionaryApp(QMainWindow):
         # Ctrl+Enter: 新規登録
         if modifiers == Qt.ControlModifier:
             self._open_editor_new()
-        # Enter: 検索実行（既に実装済み）
+        # Enter: 検索結果がある場合、一番上を選択し、コンテンツ欄にフォーカス
+        elif self.result_list.count() > 0:
+            self.result_list.setCurrentRow(0)
+            self.result_list.setFocus()
+
+    def _on_result_enter(self):
+        """コンテンツ欄でEnterキー押下時の処理"""
+        modifiers = QApplication.keyboardModifiers()
+        
+        # Ctrl+Enter: フォーカスのある語の編集画面を開く
+        if modifiers == Qt.ControlModifier:
+            self._open_editor_edit()
+        # Enter: 検索欄にフォーカス
         else:
-            pass
+            self.search_input.setFocus()
 
     def _on_result_double_click(self, item):
         """結果リストでダブルクリック時の処理"""
