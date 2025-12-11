@@ -223,11 +223,17 @@ class DictionaryApp(QMainWindow):
         """設定を読み込む"""
         font_family = self.settings.value("font", const.DEFAULT_FONT_FAMILY)
         font_size = int(self.settings.value("size", const.DEFAULT_FONT_SIZE))
+        ui_font_family = self.settings.value("ui_font", const.DEFAULT_FONT_FAMILY)
+        ui_font_size = int(self.settings.value("ui_font_size", const.DEFAULT_FONT_SIZE))
         width = int(self.settings.value("width", const.DEFAULT_WINDOW_WIDTH))
         height = int(self.settings.value("height", const.DEFAULT_WINDOW_HEIGHT))
         
         self.resize(width, height)
         self.default_font = QFont(font_family, font_size)
+        
+        # UIフォントをアプリケーション全体に適用
+        ui_font = QFont(ui_font_family, ui_font_size)
+        QApplication.instance().setFont(ui_font)
     
     def _init_search_worker(self):
         """検索ワーカーを初期化"""
