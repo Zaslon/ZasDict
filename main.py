@@ -206,12 +206,14 @@ class DictionaryApp(QMainWindow):
         self.latest_job_id = 0
         self.has_unsaved_changes = False
         self.current_file_path = None
+        self.label = QLabel("")
         
         # 設定の読み込み
         self._load_settings()
         
         # 前回の辞書ファイルを読み込み
         self._load_last_dictionary()
+        self.update_word_count()
 
         # 検索ワーカーの初期化
         # 辞書ファイルの読み込み後に呼び出すこと
@@ -244,6 +246,11 @@ class DictionaryApp(QMainWindow):
         self.worker.moveToThread(self.thread)
         self.thread.start()
         self.worker.finished.connect(self.on_search_finished)
+
+    def update_word_count(self):
+        """単語数表示の更新"""
+        count = len(self.dictionary_data.get("words", {}))
+        self.label.setText(str(count))
     
     def _build_ui(self):
         """UIを構築"""
@@ -252,14 +259,23 @@ class DictionaryApp(QMainWindow):
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
         
+        # メニューバー
+        menu_layout = QHBoxLayout()
+
+        main_layout.addLayout(menu_layout, 0)
+
+        # 右端に表示したい文字列
+        self.label.setStyleSheet("padding-right: 10px;")  # 少し余白をつけると綺麗
+
+        menu_layout.addWidget(self._create_menu_bar())
+        menu_layout.addWidget(self.label)
+
         # 検索UI（固定サイズ、ストレッチ0）
         main_layout.addLayout(self._create_search_layout(), 0)
         
         # コンテンツUI（可変サイズ、ストレッチ1で残りの領域を使用）
         main_layout.addLayout(self._create_content_layout(), 1)
-        
-        # メニューバー
-        self._create_menu_bar()
+
     
     def _create_search_layout(self) -> QHBoxLayout:
         """検索レイアウトを作成"""
@@ -308,6 +324,8 @@ class DictionaryApp(QMainWindow):
     
     def _create_menu_bar(self):
         """メニューバーを作成"""
+        layout = QHBoxLayout()
+        
         menu_bar = self.menuBar()
         
         # menu_bar.setStyleSheet("QMenuBar { border-bottom: 1px solid gray; }")
@@ -326,11 +344,7 @@ class DictionaryApp(QMainWindow):
         settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
         settings_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
 
-        # 右端に表示したい文字列
-        label = QLabel("Hello World")
-        label.setStyleSheet("padding-right: 10px;")  # 少し余白をつけると綺麗
-
-        menu_bar.setCornerWidget(label, Qt.TopRightCorner)
+        return menu_bar
 
     def _create_action(self, text: str, slot) -> QAction:
         """アクションを作成"""
@@ -789,7 +803,6 @@ class DictionaryApp(QMainWindow):
             dialog: EntryEditorDialog インスタンス
         """
         entry_data = dialog.get_entry_data()
-        entry_id = entry_data["entry"]["id"]
         form = entry_data["entry"]["form"]
         
         # wordsリストに追加
@@ -826,6 +839,8 @@ class DictionaryApp(QMainWindow):
         current_text = self.search_input.text()
         if current_text:
             self.update_results(current_text)
+            
+        self.update_word_count()
 
     def _update_entry_with_relations(self, dialog):
         """エントリを更新し、相手方に逆方向の関連語を追加
@@ -872,6 +887,8 @@ class DictionaryApp(QMainWindow):
         current_text = self.search_input.text()
         if current_text:
             self.update_results(current_text)
+    
+        self.update_word_count()
 
     def _delete_entry(self):
         """選択中のエントリを削除"""
@@ -947,6 +964,8 @@ class DictionaryApp(QMainWindow):
             self.result_list.clear()
             self.detail_view.clear()
             self.result_entries = []
+
+        self.update_word_count()
 
     def _add_reciprocal_relations(self, source_entry_id: str, reciprocal_relations: List[Dict]):
         """相手方に逆方向の関連語を追加"""
