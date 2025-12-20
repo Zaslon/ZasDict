@@ -617,47 +617,62 @@ class DictionaryApp(QMainWindow):
         if not selected_text:
             self.detail_view.clear()
             return
-        
-        if not selected_text:
-            self.detail_view.clear()
-            return
-        
-        # 選択されたリストのインデックスを取得
+
         current_index = self.result_list.currentRow()
-        
+
         if 0 <= current_index < len(self.result_entries):
             entry = self.result_entries[current_index]
             detail_text = self._format_entry_detail(entry)
-            self.detail_view.setPlainText(detail_text)
+
+            # detail.css を読み込む
+            with open("detail.css", "r", encoding="utf-8") as f:
+                css = f.read()
+
+            # CSS を HTML に埋め込む
+            html = f"""
+            <html>
+            <head>
+                <style>
+                {css}
+                </style>
+            </head>
+            <body>
+                {detail_text}
+            </body>
+            </html>
+            """
+
+            self.detail_view.setHtml(html)
     
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
         """エントリの詳細をフォーマット。すべて結合した文字列データとして出力する。"""
-        lines = [f"単語: {entry['entry']['form']}"]
+        lines = [f"<span class='form'>{entry['entry']['form']}</span><br><br>"]
         
         # 訳語
         for translation in entry.get("translations", []):
-            lines.append(f"品詞: {translation.get('title', '')}")
+            lines.append(f"<span class='pos'>{translation.get('title', '')}</span>")
             forms = ", ".join(translation.get("forms", []))
-            lines.append(f"訳語: {forms}")
+            lines.append(f":{forms}<br>")
         
         # タグ
-        tags = entry.get("tags", [])
-        if tags:
-            lines.append(f"タグ: {', '.join(tags)}")
+        # tags = entry.get("tags", [])
+        # if tags:
+        #     lines.append(f"タグ: {', '.join(tags)}")
         
         # 内容
         for content in entry.get("contents", []):
-            lines.append(f"{content.get('title', '')}: {content.get('text', '')}")
+            lines.append(f"{content.get('title', '')}: {content.get('text', '')}<br>")
+        lines.append("<br>")
         
         # バリエーション
-        for variation in entry.get("variations", []):
-            lines.append(f"{variation.get('title', '')}: {variation.get('form', '')}")
+        # for variation in entry.get("variations", []):
+        #     lines.append(f"{variation.get('title', '')}: {variation.get('form', '')}")
         
         # 関連語
         for relation in entry.get("relations", []):
             rel_form = relation.get("entry", {}).get("form", "")
-            lines.append(f"{relation.get('title', '')}: {rel_form}")
+            lines.append(f"{relation.get('title', '')}: {rel_form}<br>")
         
         return "\n".join(lines)
     

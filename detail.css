@@ -1,0 +1,9 @@
+.form{
+    font-size: larger;
+    font-weight: bold;
+}
+
+.pos{
+    display: inline-block;
+    border: 1px solid gray;
+}
