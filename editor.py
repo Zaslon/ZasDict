@@ -521,7 +521,14 @@ class EntryEditorDialog(QDialog):
         self.usage_input.setMaximumHeight(80)
         self.usage_input.setTabChangesFocus(True)
         scroll_layout.addWidget(self.usage_input)
-        
+
+        # 文化
+        scroll_layout.addWidget(QLabel("文化:"))
+        self.culture_input = QTextEdit()
+        self.culture_input.setMaximumHeight(80)
+        self.culture_input.setTabChangesFocus(True)
+        scroll_layout.addWidget(self.culture_input)
+
         # 語源
         scroll_layout.addWidget(QLabel("語源:"))
         self.etymology_input = QTextEdit()
@@ -585,8 +592,14 @@ class EntryEditorDialog(QDialog):
         self.relation_widgets.remove(widget)
         widget.deleteLater()
     
+    def _create_content(self, title: str, widget) -> Optional[Dict]:
+        """テキストウィジェットからコンテンツを作成"""
+        text = widget.toPlainText().strip()
+        return {"title": title, "text": text} if text else None
+
     def get_entry_data(self) -> Dict:
-        """エントリデータを取得"""
+        """エントリデータを取得
+        単語登録時用のエントリデータを作って返す"""
         entry_id = self.entry_id
         
         # 翻訳データ
@@ -607,14 +620,11 @@ class EntryEditorDialog(QDialog):
                 unique_relations.append(rel)
 
         # コンテンツ
-        contents = []
-        usage_text = self.usage_input.toPlainText().strip()
-        if usage_text:
-            contents.append({"title": "語法", "text": usage_text})
-        
-        etymology_text = self.etymology_input.toPlainText().strip()
-        if etymology_text:
-            contents.append({"title": "語源", "text": etymology_text})
+        contents = [c for c in [
+            self._create_content("語法", self.usage_input),
+            self._create_content("文化", self.culture_input),
+            self._create_content("語源", self.etymology_input)
+        ] if c]
         
         entry_data = {
             "entry": {
@@ -681,6 +691,8 @@ class EntryEditorDialog(QDialog):
                 self.usage_input.setPlainText(text)
             elif title == "語源":
                 self.etymology_input.setPlainText(text)
+            elif title == "文化":
+                self.culture_input.setPlainText(text)
         
         # 関連語
         relations = self.existing_entry.get("relations", [])
