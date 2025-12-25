@@ -1079,19 +1079,21 @@ class DialectConverterDialog(QDialog):
         """変換を実行"""
         word = self.input_field.text().strip()
         if not word:
-            self.result_display.setPlainText("単語を入力してください")
+            # self.result_display.setPlainText("単語を入力してください")
             return
         
         try:
             result = convert_idyer(word)
             
             # 結果を整形して表示
-            output = f"""i.s 旗: {result['sekore']}
+            output = f"""{word}\ni.s 旗: {result['sekore']}
 i.t 資: {result['titauini']}
 i.k 探: {result['kaiko']}
-i.a 教: {result['arzafire']}"""
+i.a 教: {result['arzafire']}\n---------------\n"""
             
-            self.result_display.setPlainText(output)
+            # 既存テキストを取得して追記
+            current = self.result_display.toPlainText()
+            self.result_display.setPlainText(current + output)
             
         except Exception as e:
             self.result_display.setPlainText(f"エラーが発生しました: {str(e)}")
