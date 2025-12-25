@@ -13,7 +13,8 @@ from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_AR
 import os
 import sys
 import json
-import re
+import csv
+from datetime import datetime
 from functools import cmp_to_key
 from typing import Dict, List, Set, Tuple, Optional
 
@@ -207,6 +208,7 @@ class DictionaryApp(QMainWindow):
         self.has_unsaved_changes = False
         self.current_file_path = None
         self.label = QLabel("")
+        self.changelog_entries = []
         
         # 設定の読み込み
         self._load_settings()
@@ -459,6 +461,9 @@ class DictionaryApp(QMainWindow):
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.dictionary_data, f, ensure_ascii=False, separators=(",", ":"))
             
+            # Save changelog
+            self._save_changelog(file_path)
+            
             self.current_file_path = file_path
             self.has_unsaved_changes = False
             
@@ -476,6 +481,49 @@ class DictionaryApp(QMainWindow):
         auto_save = self.settings.value("auto_save", "false")
         if auto_save == "true" and self.current_file_path:
             self._save_to_file(self.current_file_path)
+
+    def _add_changelog_entry(self, entry_type: str, form: str, details: str = ""):
+        """Add an entry to the changelog"""
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        self.changelog_entries.append({
+            "timestamp": timestamp,
+            "type": entry_type,
+            "form": form,
+            "details": details
+        })
+    
+    def _save_changelog(self, json_file_path: str):
+        """Save changelog to CSV file alongside the JSON"""
+        if not self.changelog_entries:
+            return
+        
+        # Create changelog filename (same directory and base name as JSON)
+        base_path = os.path.splitext(json_file_path)[0]
+        changelog_path = f"{base_path}_changelog.csv"
+        
+        # Check if file exists to determine if we need to write headers
+        file_exists = os.path.exists(changelog_path)
+        
+        # Append to existing file or create new
+        with open(changelog_path, 'a', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            
+            # Write header if creating new file
+            if not file_exists:
+                writer.writerow(['timestamp', 'type', 'form', 'details'])
+            
+            # Write changelog entries
+            for entry in self.changelog_entries:
+                writer.writerow([
+                    entry['timestamp'],
+                    entry['type'],
+                    entry['form'],
+                    entry.get('details', '')  # 空文字列をデフォルト値とする
+                ])
+        
+        # Clear changelog entries after saving
+        self.changelog_entries.clear()
+    
     
     # ----------------------------------------------------------------
     # 環境設定
@@ -828,6 +876,9 @@ class DictionaryApp(QMainWindow):
         
         # 相手方に逆方向の関連語を追加
         dialog.apply_reciprocal_relations()
+
+        # changelogに追記
+        self._add_changelog_entry("ADD", form)
         
         # 変更フラグを立てる
         self._mark_as_modified()
@@ -876,6 +927,9 @@ class DictionaryApp(QMainWindow):
         
         # 相手方に逆方向の関連語を追加
         dialog.apply_reciprocal_relations()
+
+        # changelogに追記
+        self._add_changelog_entry("CHANGE", form)
         
         # 変更フラグを立てる
         self._mark_as_modified()
@@ -949,6 +1003,9 @@ class DictionaryApp(QMainWindow):
                 if rel.get("entry", {}).get("id") != entry_id
             ]
         
+        # changelogに追記
+        self._add_changelog_entry("DELETE", form)
+
         # 変更フラグを立てる
         self._mark_as_modified()
         
