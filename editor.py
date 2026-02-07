@@ -369,7 +369,7 @@ class EntryEditorDialog(QDialog):
         
         title = "単語編集" if self.is_edit_mode else "新規単語登録"
         self.setWindowTitle(title)
-        self.resize(700, 600)
+        self.resize(500, 600)
         self._build_ui()
         
         # 既存データを読み込む

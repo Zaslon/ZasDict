@@ -1098,8 +1098,8 @@ class DialectConverterDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("変換")
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(400)
+        self.setMinimumWidth(200)
+        self.setMinimumHeight(200)
         
         self._setup_ui()
 
@@ -1170,7 +1170,7 @@ class IPAConverterDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("IPA to Spell Converter")
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(200, 200)
         self.init_ui()
     
     def init_ui(self):
