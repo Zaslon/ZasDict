@@ -199,7 +199,11 @@ class DictionaryApp(QMainWindow):
         self.setWindowTitle(const.APP_TITLE)
         
         # 設定とデータの初期化
-        self.settings = QSettings("settings.ini", QSettings.IniFormat)
+        # このPythonファイルのディレクトリを取得
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        settings_path = os.path.join(script_dir, "settings.ini")
+        self.settings = QSettings(settings_path, QSettings.IniFormat)
+
         self.dictionary_data = {}
         self.search_index = {}
         self.id_map = {}
@@ -360,7 +364,8 @@ class DictionaryApp(QMainWindow):
         if not last_file:
             return
         
-        last_file = os.path.abspath(last_file)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        last_file = os.path.join(script_dir, last_file)
         if not os.path.exists(last_file):
             return
         
@@ -418,7 +423,8 @@ class DictionaryApp(QMainWindow):
             self.search_input.setText("")
             
             # 設定に保存
-            rel_path = os.path.relpath(file_path, os.getcwd())
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            rel_path = os.path.relpath(file_path, script_dir)
             self.settings.setValue("last_dictionary", rel_path)
             
         except Exception as e:
