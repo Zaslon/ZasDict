@@ -1111,7 +1111,6 @@ class DialectConverterDialog(QDialog):
         input_label = QLabel("元単語（アクセントは大文字）:")
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("例: nyUryoku")
-        self.input_field.returnPressed.connect(self.convert)
         
         input_layout.addWidget(input_label)
         input_layout.addWidget(self.input_field)
