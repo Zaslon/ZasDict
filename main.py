@@ -343,13 +343,15 @@ class DictionaryApp(QMainWindow):
         file_menu.addAction(self._create_action("名前を付けて保存", self.save_as_file))
         file_menu.addAction(self._create_action("終了", self.close))
         
+        # ツールメニュー
+        tools_menu = menu_bar.addMenu("ツール")
+        tools_menu.addAction(self._create_action("変換", self.open_idyer_converter))
+        tools_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
+
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
         settings_menu.addAction(self._create_action("辞書依存設定", self.open_dictionary_settings))
-        settings_menu.addAction(self._create_action("変換", self.open_idyer_converter))
-        settings_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
-
         return menu_bar
 
     def _create_action(self, text: str, slot) -> QAction:
