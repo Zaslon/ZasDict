@@ -349,14 +349,14 @@ class WordSelectDialog(QDialog):
 class EntryEditorDialog(QDialog):
     """エントリ編集ダイアログ"""
     
-    def __init__(self, dictionary_data, search_index, id_map, initial_form="", existing_entry=None, parent=None):
+    def __init__(self, dictionary_data, search_index, id_map, initial_form="", existing_entry=None, parent=None, is_edit_mode=False):
         super().__init__(parent)
         self.dictionary_data = dictionary_data
         self.search_index = search_index
         self.id_map = id_map
         self.initial_form = initial_form
-        self.existing_entry = existing_entry  # 既存エントリ（編集時）
-        self.is_edit_mode = existing_entry is not None
+        self.existing_entry = existing_entry  # 既存エントリの内容を渡す
+        self.is_edit_mode = is_edit_mode # 新規作成か既存の編集か。既存エントリ編集時はTrueとする。
 
         # 編集モードの場合は既存のIDを使用、新規の場合は生成
         if self.is_edit_mode:
@@ -373,7 +373,7 @@ class EntryEditorDialog(QDialog):
         self._build_ui()
         
         # 既存データを読み込む
-        if self.is_edit_mode:
+        if self.existing_entry:
             self._load_existing_data()
 
     def apply_reciprocal_relations(self):

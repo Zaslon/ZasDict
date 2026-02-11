@@ -804,15 +804,15 @@ class DictionaryApp(QMainWindow):
         menu = QMenu(self)
         
         edit_action = menu.addAction("編集")
-        # duplicate_action = menu.addAction("複製")
+        duplicate_action = menu.addAction("複製")
         delete_action = menu.addAction("削除")
         
         action = menu.exec(self.result_list.mapToGlobal(position))
         
         if action == edit_action:
             self._open_editor_edit()
-        # elif action == duplicate_action:
-        #     self._open_editor_duplicate()
+        elif action == duplicate_action:
+            self._open_editor_duplicate()
         elif action == delete_action:
             self._delete_entry()
 
@@ -840,6 +840,29 @@ class DictionaryApp(QMainWindow):
         dialog.accepted.connect(lambda: self._register_entry_with_relations(dialog))
         dialog.show()
 
+    def _open_editor_duplicate(self):
+        """複製用エディタを開く"""
+        current_row = self.result_list.currentRow()
+        
+        if current_row < 0 or current_row >= len(self.result_entries):
+            return
+        
+        # 選択されたエントリを取得
+        entry = self.result_entries[current_row]
+        
+        dialog = EntryEditorDialog(
+            self.dictionary_data,
+            self.search_index,
+            self.id_map,
+            existing_entry=entry,
+            parent=self,
+            is_edit_mode=False
+        )
+
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.accepted.connect(lambda: self._register_entry_with_relations(dialog))
+        dialog.show()
+
     def _open_editor_edit(self):
         """編集用エディタを開く"""
         current_row = self.result_list.currentRow()
@@ -854,9 +877,9 @@ class DictionaryApp(QMainWindow):
             self.dictionary_data,
             self.search_index,
             self.id_map,
-            initial_form="",
             existing_entry=entry,
-            parent=self
+            parent=self,
+            is_edit_mode=True
         )
 
         dialog.setWindowModality(Qt.WindowModal)
