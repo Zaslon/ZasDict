@@ -2,3 +2,5 @@
 .venv
 activate.bat
 settings.ini
+/*.json
+/*.csv
