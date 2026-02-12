@@ -357,12 +357,7 @@ class EntryEditorDialog(QDialog):
         self.initial_form = initial_form
         self.existing_entry = existing_entry  # 既存エントリの内容を渡す
         self.is_edit_mode = is_edit_mode # 新規作成か既存の編集か。既存エントリ編集時はTrueとする。
-
-        # 編集モードの場合は既存のIDを使用、新規の場合は生成
-        if self.is_edit_mode:
-            self.entry_id = self.existing_entry["entry"]["id"]
-        else:
-            self.entry_id = self._generate_unique_id()
+        self.entry_id = -1 # ID設定は登録時に更新する
         
         self.translation_widgets = []
         self.relation_widgets = []
@@ -375,6 +370,13 @@ class EntryEditorDialog(QDialog):
         # 既存データを読み込む
         if self.existing_entry:
             self._load_existing_data()
+
+    def _set_entry_id(self):
+        """編集モードの場合は既存のIDを使用、新規の場合は生成する"""
+        if self.is_edit_mode:
+            self.entry_id = self.existing_entry["entry"]["id"]
+        else:
+            self.entry_id = self._generate_unique_id()
 
     def apply_reciprocal_relations(self):
         """相手方のエントリに逆方向の関連語を追加する
@@ -421,7 +423,7 @@ class EntryEditorDialog(QDialog):
             reciprocal_relation = {
                 "title": reciprocal_type,
                 "entry": {
-                    "id": current_entry_id,
+                    "id": self.entry_id,
                     "form": current_entry_form
                 }
             }
@@ -600,6 +602,7 @@ class EntryEditorDialog(QDialog):
     def get_entry_data(self) -> Dict:
         """エントリデータを取得
         単語登録時用のエントリデータを作って返す"""
+        self._set_entry_id()
         entry_id = self.entry_id
         
         # 翻訳データ
@@ -642,7 +645,7 @@ class EntryEditorDialog(QDialog):
     
     def _generate_unique_id(self) -> int:
         """一意なIDを生成（integer型）
-            エラー時は最大値の2147483647を返すことで、他のエントリを破壊しないように処置する。"""
+            エラー時は-1を返すことで、他のエントリを破壊しないように処置する。"""
         existing_ids = set()
         for entry in self.dictionary_data.get("words", []):
             entry_id = entry.get("entry", {}).get("id")
@@ -653,7 +656,7 @@ class EntryEditorDialog(QDialog):
         if existing_ids:
             return max(existing_ids) + 1
         else:
-            return 2147483647
+            return -1
     
     def _load_existing_data(self):
         """既存データを読み込む"""

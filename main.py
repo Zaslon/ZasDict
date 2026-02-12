@@ -836,7 +836,7 @@ class DictionaryApp(QMainWindow):
             parent=self
         )
         
-        dialog.setWindowModality(Qt.WindowModal)
+        # dialog.setWindowModality(Qt.WindowModal)
         dialog.accepted.connect(lambda: self._register_entry_with_relations(dialog))
         dialog.show()
 
@@ -859,7 +859,7 @@ class DictionaryApp(QMainWindow):
             is_edit_mode=False
         )
 
-        dialog.setWindowModality(Qt.WindowModal)
+        # dialog.setWindowModality(Qt.WindowModal)
         dialog.accepted.connect(lambda: self._register_entry_with_relations(dialog))
         dialog.show()
 
@@ -882,7 +882,7 @@ class DictionaryApp(QMainWindow):
             is_edit_mode=True
         )
 
-        dialog.setWindowModality(Qt.WindowModal)
+        # dialog.setWindowModality(Qt.WindowModal)
         dialog.accepted.connect(lambda: self._update_entry_with_relations(dialog))
         dialog.show()
 
@@ -897,6 +897,7 @@ class DictionaryApp(QMainWindow):
             dialog: EntryEditorDialog インスタンス
         """
         entry_data = dialog.get_entry_data()
+        entry_id = entry_data["entry"]["id"]
         form = entry_data["entry"]["form"]
         
         # wordsリストに追加
@@ -929,7 +930,7 @@ class DictionaryApp(QMainWindow):
         QMessageBox.information(
             self,
             "登録完了",
-            f"「{form}」を登録しました。"
+            f"{form}#{entry_id} を登録しました。"
         )
         
         # 検索結果を更新
@@ -980,7 +981,7 @@ class DictionaryApp(QMainWindow):
         QMessageBox.information(
             self,
             "更新完了",
-            f"「{form}」を更新しました。"
+            f"{form}#{entry_id} を更新しました。"
         )
         
         # 検索結果を更新
@@ -1011,7 +1012,7 @@ class DictionaryApp(QMainWindow):
         reply = QMessageBox.question(
             self,
             "エントリの削除",
-            f"「{form}」を削除しますか？\n\n他のエントリの関連語からも削除されます。",
+            f"{form}#{entry_id} を削除しますか？\n\n他のエントリの関連語からも削除されます。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
