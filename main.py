@@ -333,8 +333,16 @@ class DictionaryApp(QMainWindow):
         layout = QHBoxLayout()
         
         menu_bar = self.menuBar()
+
+        # フォントメトリクスを取得して高さを計算
+        font_metrics = menu_bar.fontMetrics()
+        item_padding = int(font_metrics.height() * 0.3)  # フォント高さの30%
         
-        # menu_bar.setStyleSheet("QMenuBar { border-bottom: 1px solid gray; }")
+        menu_bar.setStyleSheet(f"""
+            QMenuBar::item {{
+                padding: {item_padding}px 8px;
+            }}
+        """)
         
         # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
