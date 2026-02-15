@@ -20,24 +20,6 @@ class TranslationWidget(QWidget):
     
     remove_requested = Signal(object)  # 削除要求シグナル
     
-    # 品詞の選択肢（バリデーション用）
-    VALID_POS = [
-        "名詞",        # 通常名詞・複合名詞
-        "代名詞",      # 私、あなた、彼など
-        "固有名詞",    # 人名・地名など
-        "動詞",        # 活用する動詞
-        "記述詞",      # 形容詞・副詞
-        "法性記述詞",  # モダリティを表す記述詞
-        "助詞",        # は、が、を、など
-        "接続詞",      # そして、しかし、など
-        "間投詞",      # ああ、ええ、こんにちは、など
-        "慣用句",      # 足が出る、鯖を読む、など
-        "ことわざ",    # 勝てば官軍、仏の顔も三度まで、など
-        "接頭辞",      # 再〜、非〜、など
-        "接尾辞",      # 〜的、〜性、など
-        "助動詞"       # 〜ない、〜れる、など
-    ]
-    
     def __init__(self, removable=True, parent=None):
         super().__init__(parent)
         self.removable = removable
@@ -51,7 +33,7 @@ class TranslationWidget(QWidget):
         # 品詞
         self.pos_combo = QComboBox()
         self.pos_combo.setEditable(True)
-        self.pos_combo.addItems(self.VALID_POS)
+        self.pos_combo.addItems(const.VALID_POS)
         self.pos_combo.setMaximumWidth(120)
         
         # 訳語
@@ -97,11 +79,6 @@ class RelationWidget(QWidget):
     
     remove_requested = Signal(object)
     
-    # 関係の選択肢（バリデーション用）
-    VALID_RELATIONS = [
-            "類義語","対義語","上位語","下位語","関連","参照","省略","同意"
-    ]
-    
     def __init__(self, dictionary_data, search_index, id_map, removable=True, parent=None):
         super().__init__(parent)
         self.dictionary_data = dictionary_data
@@ -118,7 +95,7 @@ class RelationWidget(QWidget):
         # 関係
         self.relation_combo = QComboBox()
         self.relation_combo.setEditable(True)
-        self.relation_combo.addItems(self.VALID_RELATIONS)
+        self.relation_combo.addItems(const.VALID_RELATIONS)
         self.relation_combo.setMaximumWidth(120)
         
         # 単語選択ボタン
@@ -390,16 +367,6 @@ class EntryEditorDialog(QDialog):
         このメソッドは呼び出し側（メインウィンドウなど）で実行すべき処理
         エディタ内で辞書データを直接変更する
         """
-        reciprocal_map = {
-            "類義語": "類義語",
-            "対義語": "対義語",
-            "上位語": "下位語",
-            "下位語": "上位語",
-            "関連": "関連",
-            "参照": "参照",
-            "省略": "省略",
-            "同意": "同意"
-        }
         
         current_entry_id = self.entry_id
         current_entry_form = self.form_input.text().strip()
@@ -423,7 +390,7 @@ class EntryEditorDialog(QDialog):
                 continue
             
             # 逆方向の関係タイプ
-            reciprocal_type = reciprocal_map.get(relation_type, "関連")
+            reciprocal_type = const.RECIPROCAL_MAP.get(relation_type, "関連")
             
             # 逆方向の関連語を作成
             reciprocal_relation = {
@@ -456,17 +423,7 @@ class EntryEditorDialog(QDialog):
         注意: このメソッドは参照用です。
         実際に辞書データを更新するには apply_reciprocal_relations() を使用してください。
         """
-        reciprocal_map = {
-            "類義語": "類義語",
-            "対義語": "対義語",
-            "上位語": "下位語",
-            "下位語": "上位語",
-            "関連": "関連",
-            "参照": "参照",
-            "省略": "省略",
-            "同意": "同意"
-        }
-        
+
         reciprocal_relations = []
         current_entry_id = self.entry_id
         current_entry_form = self.form_input.text().strip()
@@ -480,7 +437,7 @@ class EntryEditorDialog(QDialog):
             target_entry_id = data["entry"]["id"]
             
             # 逆方向の関係を取得
-            reciprocal_type = reciprocal_map.get(relation_type, "関連")
+            reciprocal_type = const.RECIPROCAL_MAP.get(relation_type, "関連")
             
             reciprocal_relations.append({
                 "target_entry_id": target_entry_id,
