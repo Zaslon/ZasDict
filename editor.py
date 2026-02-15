@@ -5,14 +5,15 @@ ZasDict - 編集画面モジュール
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QComboBox,
     QPushButton, QLabel, QTextEdit, QWidget, QScrollArea,
-    QListWidget, QSplitter
+    QListWidget, QSplitter, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QFontMetrics
 from typing import Dict, List, Optional
 
 from func import TextProcessor
 import re
+import const
 
 class TranslationWidget(QWidget):
     """品詞と訳語のセット"""
@@ -358,9 +359,14 @@ class EntryEditorDialog(QDialog):
         self.existing_entry = existing_entry  # 既存エントリの内容を渡す
         self.is_edit_mode = is_edit_mode # 新規作成か既存の編集か。既存エントリ編集時はTrueとする。
         self.entry_id = -1 # ID設定は登録時に更新する
+
+        fm = QFontMetrics(self.font())
+        self.lh = 1.4*fm.height()
         
         self.translation_widgets = []
         self.relation_widgets = []
+        
+        self.content_inputs = {}
         
         title = "単語編集" if self.is_edit_mode else "新規単語登録"
         self.setWindowTitle(title)
@@ -496,59 +502,43 @@ class EntryEditorDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout()
-        scroll_widget.setLayout(scroll_layout)
+        self.scroll_layout = QVBoxLayout()
+        scroll_widget.setLayout(self.scroll_layout)
         scroll.setWidget(scroll_widget)
         
         # 見出し語
-        scroll_layout.addWidget(QLabel("見出し語:"))
+        self.scroll_layout.addWidget(QLabel("見出し語:"))
         self.form_input = QLineEdit()
         self.form_input.setText(self.initial_form)
-        scroll_layout.addWidget(self.form_input)
+        self.scroll_layout.addWidget(self.form_input)
         
         # 品詞・訳語
-        scroll_layout.addWidget(QLabel("品詞・訳語:"))
+        self.scroll_layout.addWidget(QLabel("品詞・訳語:"))
         self.translation_container = QVBoxLayout()
         self._add_translation(removable=False)
         
         add_trans_btn = QPushButton("＋ 品詞・訳語を追加")
         add_trans_btn.clicked.connect(lambda: self._add_translation(removable=True))
         
-        scroll_layout.addLayout(self.translation_container)
-        scroll_layout.addWidget(add_trans_btn)
-        
-        # 語法
-        scroll_layout.addWidget(QLabel("語法:"))
-        self.usage_input = QTextEdit()
-        self.usage_input.setMaximumHeight(80)
-        self.usage_input.setTabChangesFocus(True)
-        scroll_layout.addWidget(self.usage_input)
+        self.scroll_layout.addLayout(self.translation_container)
+        self.scroll_layout.addWidget(add_trans_btn)
 
-        # 文化
-        scroll_layout.addWidget(QLabel("文化:"))
-        self.culture_input = QTextEdit()
-        self.culture_input.setMaximumHeight(80)
-        self.culture_input.setTabChangesFocus(True)
-        scroll_layout.addWidget(self.culture_input)
-
-        # 語源
-        scroll_layout.addWidget(QLabel("語源:"))
-        self.etymology_input = QTextEdit()
-        self.etymology_input.setMaximumHeight(80)
-        self.etymology_input.setTabChangesFocus(True)
-        scroll_layout.addWidget(self.etymology_input)
+        self._add_content_input_widget("語法")
+        self._add_content_input_widget("文化")
+        self._add_content_input_widget("用例")
+        self._add_content_input_widget("語源")
         
         # 関連語
-        scroll_layout.addWidget(QLabel("関連語:"))
+        self.scroll_layout.addWidget(QLabel("関連語:"))
         self.relation_container = QVBoxLayout()
         
         add_rel_btn = QPushButton("＋ 関連語を追加")
         add_rel_btn.clicked.connect(lambda: self._add_relation(removable=True))
         
-        scroll_layout.addLayout(self.relation_container)
-        scroll_layout.addWidget(add_rel_btn)
+        self.scroll_layout.addLayout(self.relation_container)
+        self.scroll_layout.addWidget(add_rel_btn)
         
-        scroll_layout.addStretch()
+        self.scroll_layout.addStretch()
         
         # ボタン
         button_layout = QHBoxLayout()
@@ -563,6 +553,19 @@ class EntryEditorDialog(QDialog):
         main_layout.addLayout(button_layout)
         
         self.setLayout(main_layout)
+
+    def _add_content_input_widget(self, label, min_lines=1, max_lines=3):
+        self.scroll_layout.addWidget(QLabel(f"{label}:"))
+
+        widget = QPlainTextEdit()
+        widget.setMaximumHeight(max_lines * self.lh)
+        widget.setMinimumHeight(min_lines * self.lh)
+        widget.setTabChangesFocus(True)
+
+        #辞書にまとめて保存
+        self.content_inputs[label] = widget
+
+        self.scroll_layout.addWidget(widget)
     
     def _add_translation(self, removable=True):
         """品詞・訳語セットを追加"""
@@ -595,7 +598,8 @@ class EntryEditorDialog(QDialog):
         widget.deleteLater()
     
     def _create_content(self, title: str, widget) -> Optional[Dict]:
-        """テキストウィジェットからコンテンツを作成"""
+        """テキストウィジェットからコンテンツを作成。
+        空欄の場合は追加しない。"""
         text = widget.toPlainText().strip()
         return {"title": title, "text": text} if text else None
 
@@ -623,11 +627,11 @@ class EntryEditorDialog(QDialog):
                 unique_relations.append(rel)
 
         # コンテンツ
-        contents = [c for c in [
-            self._create_content("語法", self.usage_input),
-            self._create_content("文化", self.culture_input),
-            self._create_content("語源", self.etymology_input)
-        ] if c]
+        contents = [
+            self._create_content(title, widget)
+            for title, widget in self.content_inputs.items()
+        ]
+        contents = [c for c in contents if c]
         
         entry_data = {
             "entry": {
@@ -685,17 +689,14 @@ class EntryEditorDialog(QDialog):
                     trans.get("forms", [])
                 )
         
-        # 語法・語源
+        # コンテンツ
         for content in self.existing_entry.get("contents", []):
             title = content.get("title", "")
             text = content.get("text", "")
-            
-            if title == "語法":
-                self.usage_input.setPlainText(text)
-            elif title == "語源":
-                self.etymology_input.setPlainText(text)
-            elif title == "文化":
-                self.culture_input.setPlainText(text)
+
+            # title が content_inputs のキーに存在すればセット
+            if title in self.content_inputs:
+                self.content_inputs[title].setPlainText(text)
         
         # 関連語
         relations = self.existing_entry.get("relations", [])
