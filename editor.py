@@ -468,6 +468,7 @@ class EntryEditorDialog(QDialog):
         self.form_input = QLineEdit()
         self.form_input.setText(self.initial_form)
         self.scroll_layout.addWidget(self.form_input)
+
         
         # 品詞・訳語
         self.scroll_layout.addWidget(QLabel("品詞・訳語:"))
@@ -480,6 +481,8 @@ class EntryEditorDialog(QDialog):
         self.scroll_layout.addLayout(self.translation_container)
         self.scroll_layout.addWidget(add_trans_btn)
 
+        # コンテンツ
+        self._add_content_input_widget("発音記号",1,1)
         self._add_content_input_widget("語法")
         self._add_content_input_widget("文化")
         self._add_content_input_widget("用例")
@@ -512,12 +515,23 @@ class EntryEditorDialog(QDialog):
         self.setLayout(main_layout)
 
     def _add_content_input_widget(self, label, min_lines=1, max_lines=3):
+        """
+        コンテンツ欄の表示と連想配列を作る。
+        最小最大がともに1の場合、QLineEditに自動で変更する。
+        
+        :param label: 項目名
+        :param min_lines: 表示の最小行数
+        :param max_lines: 表示の最大行数
+        """
         self.scroll_layout.addWidget(QLabel(f"{label}:"))
 
-        widget = QPlainTextEdit()
-        widget.setMaximumHeight(max_lines * self.lh)
-        widget.setMinimumHeight(min_lines * self.lh)
-        widget.setTabChangesFocus(True)
+        if (min_lines == 1 and max_lines == 1):
+            widget = QLineEdit()
+        else:
+            widget = QPlainTextEdit()
+            widget.setMaximumHeight(max_lines * self.lh)
+            widget.setMinimumHeight(min_lines * self.lh)
+            widget.setTabChangesFocus(True)
 
         #辞書にまとめて保存
         self.content_inputs[label] = widget
@@ -557,7 +571,11 @@ class EntryEditorDialog(QDialog):
     def _create_content(self, title: str, widget) -> Optional[Dict]:
         """テキストウィジェットからコンテンツを作成。
         空欄の場合は追加しない。"""
-        text = widget.toPlainText().strip()
+        try:
+            text = widget.toPlainText().strip()
+        except:
+            text = widget.text().strip()
+
         return {"title": title, "text": text} if text else None
 
     def get_entry_data(self) -> Dict:
@@ -653,7 +671,10 @@ class EntryEditorDialog(QDialog):
 
             # title が content_inputs のキーに存在すればセット
             if title in self.content_inputs:
-                self.content_inputs[title].setPlainText(text)
+                try:
+                    self.content_inputs[title].setPlainText(text)
+                except:
+                    self.content_inputs[title].setText(text)
         
         # 関連語
         relations = self.existing_entry.get("relations", [])
