@@ -22,6 +22,7 @@ import const
 from func import DictionaryLoader, SearchWorker
 from kaiomom import convert_idyer
 from ipa import ipaToSpell
+from changelog import ChangelogViewerWidget
 from editor import EntryEditorDialog
 
 # ============================================================================
@@ -211,6 +212,7 @@ class DictionaryApp(QMainWindow):
         self.latest_job_id = 0
         self.has_unsaved_changes = False
         self.current_file_path = None
+        self.changelog_path = None
         self.label = QLabel("")
         self.changelog_entries = []
         
@@ -349,6 +351,7 @@ class DictionaryApp(QMainWindow):
         file_menu.addAction(self._create_action("開く", self.open_file))
         file_menu.addAction(self._create_action("上書き保存", self.save_file))
         file_menu.addAction(self._create_action("名前を付けて保存", self.save_as_file))
+        file_menu.addAction(self._create_action("更新履歴", self.open_changelog_viwer))
         file_menu.addAction(self._create_action("終了", self.close))
         
         # ツールメニュー
@@ -514,14 +517,14 @@ class DictionaryApp(QMainWindow):
             return
         
         # Create changelog filename (same directory and base name as JSON)
-        base_path = os.path.splitext(json_file_path)[0]
-        changelog_path = f"{base_path}_changelog.csv"
+        # base_path = os.path.splitext(json_file_path)[0]
+        # self.changelog_path = f"{base_path}_changelog.csv"
         
         # Check if file exists to determine if we need to write headers
-        file_exists = os.path.exists(changelog_path)
+        file_exists = os.path.exists(self.changelog_path)
         
         # Append to existing file or create new
-        with open(changelog_path, 'a', encoding='utf-8', newline='') as f:
+        with open(self.changelog_path, 'a', encoding='utf-8', newline='') as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             
             # Write header if creating new file
@@ -539,6 +542,19 @@ class DictionaryApp(QMainWindow):
         
         # Clear changelog entries after saving
         self.changelog_entries.clear()
+
+    def open_changelog_viwer(self):
+        """変更履歴ウィジェットを開く"""
+        if not self.changelog_path or not os.path.exists(self.changelog_path):
+            QMessageBox.warning(
+                self,
+                "更新履歴なし",
+                "更新履歴ファイルが存在しません。\n辞書を保存すると更新履歴が作成されます。"
+            )
+            return
+        
+        self.widget = ChangelogViewerWidget(self.changelog_path)
+        self.widget.show()
     
     
     # ----------------------------------------------------------------
