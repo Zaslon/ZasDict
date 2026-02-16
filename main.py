@@ -406,6 +406,10 @@ class DictionaryApp(QMainWindow):
         # 現在のファイルパスを記憶
         self.current_file_path = file_path
         self.has_unsaved_changes = False
+
+        # changelogパスを設定（ファイルが存在しなくてもパスは設定）
+        base_path = os.path.splitext(file_path)[0]
+        self.changelog_path = f"{base_path}_changelog.csv"  # ← この行を追加
         
         # タイトルを更新
         file_name = os.path.basename(file_path)
