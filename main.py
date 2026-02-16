@@ -425,7 +425,7 @@ class DictionaryApp(QMainWindow):
             self,
             "辞書ファイルを開く",
             "",
-            "JSON Files (*.json)"
+            "OTM-json (*.json)"
         )
         
         if not file_path:
@@ -458,7 +458,7 @@ class DictionaryApp(QMainWindow):
             self,
             "辞書ファイルを上書き保存",
             "",
-            "JSON Files (*.json)"
+            "OTM-json (*.json)"
         )
         
         if not file_path:
@@ -472,7 +472,7 @@ class DictionaryApp(QMainWindow):
             self,
             "辞書ファイルを名前を付けて保存",
             "",
-            "JSON Files (*.json)"
+            "OTM-json (*.json)"
         )
         if not file_path:
             return False
