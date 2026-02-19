@@ -1213,6 +1213,8 @@ i.a 教: {result['arzafire']}\n---------------\n"""
             
         except Exception as e:
             self.result_display.setPlainText(f"エラーが発生しました: {str(e)}")
+        
+        self.input_field.clear()
 
 # ============================================================================
 # IPA画面
