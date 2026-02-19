@@ -593,13 +593,13 @@ class DictionaryApp(QMainWindow):
 
     def open_idyer_converter(self):
         """変換ダイアログを開く"""
-        dialog = DialectConverterDialog(self)
-        dialog.show()
+        self.id_widget = DialectConverterWidget()
+        self.id_widget.show()
 
     def open_ipa_converter(self):
         """IPA変換ダイアログを開く"""
-        dialog = IPAConverterDialog(self)
-        dialog.show()
+        self.ipa_widget = IPAConverterWidget()
+        self.ipa_widget.show()
     
     def open_dictionary_settings(self):
         """辞書依存設定ダイアログを開く"""
@@ -1146,8 +1146,8 @@ class DictionaryApp(QMainWindow):
 # 変換画面
 # ============================================================================
 
-class DialectConverterDialog(QDialog):
-    """変換ダイアログ"""
+class DialectConverterWidget(QWidget):
+    """変換ウィジェット"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1179,15 +1179,15 @@ class DialectConverterDialog(QDialog):
         self.result_display.setPlaceholderText("変換結果がここに表示されます")
         
         # 閉じるボタン
-        close_button = QPushButton("閉じる")
-        close_button.clicked.connect(self.accept)
+        # close_button = QPushButton("閉じる")
+        # close_button.clicked.connect(self.accept)
         
         # レイアウトに追加
         layout.addLayout(input_layout)
         layout.addWidget(convert_button)
         layout.addWidget(QLabel("変換結果:"))
         layout.addWidget(self.result_display)
-        layout.addWidget(close_button)
+        # layout.addWidget(close_button)
         
         self.setLayout(layout)
 
@@ -1218,8 +1218,8 @@ i.a 教: {result['arzafire']}\n---------------\n"""
 # IPA画面
 # ============================================================================
 
-class IPAConverterDialog(QDialog):
-    """IPA変換ダイアログ"""
+class IPAConverterWidget(QWidget):
+    """IPA変換ウィジェット"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1269,15 +1269,15 @@ class IPAConverterDialog(QDialog):
         layout.addWidget(self.output_text)
         
         # 閉じるボタン
-        close_layout = QHBoxLayout()
-        close_layout.addStretch()
+        # close_layout = QHBoxLayout()
+        # close_layout.addStretch()
         
-        self.close_button = QPushButton("閉じる")
-        self.close_button.clicked.connect(self.accept)
-        self.close_button.setMinimumWidth(100)
-        close_layout.addWidget(self.close_button)
+        # self.close_button = QPushButton("閉じる")
+        # self.close_button.clicked.connect(self.accept)
+        # self.close_button.setMinimumWidth(100)
+        # close_layout.addWidget(self.close_button)
         
-        layout.addLayout(close_layout)
+        # layout.addLayout(close_layout)
         
         self.setLayout(layout)
     
