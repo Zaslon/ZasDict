@@ -454,53 +454,49 @@ class EntryEditorDialog(QDialog):
     
     def _build_ui(self):
         main_layout = QVBoxLayout()
-        
-        # スクロール可能な領域
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_widget = QWidget()
         self.scroll_layout = QVBoxLayout()
         scroll_widget.setLayout(self.scroll_layout)
         scroll.setWidget(scroll_widget)
-        
-        # 見出し語
+
         self.scroll_layout.addWidget(QLabel("見出し語:"))
         self.form_input = QLineEdit()
         self.form_input.setText(self.initial_form)
         self.scroll_layout.addWidget(self.form_input)
 
-        
-        # 品詞・訳語
         self.scroll_layout.addWidget(QLabel("品詞・訳語:"))
         self.translation_container = QVBoxLayout()
         self._add_translation(removable=False)
-        
         add_trans_btn = QPushButton("＋ 品詞・訳語を追加")
         add_trans_btn.clicked.connect(lambda: self._add_translation(removable=True))
-        
         self.scroll_layout.addLayout(self.translation_container)
         self.scroll_layout.addWidget(add_trans_btn)
 
-        # コンテンツ
-        self._add_content_input_widget("発音記号",1,1)
+        self.content_widgets = {}
+        self.toggle_buttons = {}
+
+        # トグルボタン行
+        toggle_layout = QHBoxLayout()
+        main_layout.addLayout(toggle_layout)  # スクロール外に置く
+
+        self._add_content_input_widget("発音記号", 1, 1)
         self._add_content_input_widget("語法")
-        self._add_content_input_widget("文化")
-        self._add_content_input_widget("用例")
+        self._add_content_input_widget("文化", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
+        self._add_content_input_widget("用例", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
         self._add_content_input_widget("語源")
-        
-        # 関連語
+
         self.scroll_layout.addWidget(QLabel("関連語:"))
         self.relation_container = QVBoxLayout()
-        
         add_rel_btn = QPushButton("＋ 関連語を追加")
         add_rel_btn.clicked.connect(lambda: self._add_relation(removable=True))
-        
         self.scroll_layout.addLayout(self.relation_container)
         self.scroll_layout.addWidget(add_rel_btn)
-        
+
         self.scroll_layout.addStretch()
-        
-        # ボタン
+
         button_layout = QHBoxLayout()
         ok_btn = QPushButton("OK")
         cancel_btn = QPushButton("キャンセル")
@@ -508,24 +504,24 @@ class EntryEditorDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(ok_btn)
         button_layout.addWidget(cancel_btn)
-        
+
         main_layout.addWidget(scroll)
         main_layout.addLayout(button_layout)
-        
         self.setLayout(main_layout)
 
-    def _add_content_input_widget(self, label, min_lines=1, max_lines=3):
+
+    def _add_content_input_widget(self, label, min_lines=1, max_lines=3,
+                                toggleable=False, toggle_layout=None, default_visible=True):
         """
         コンテンツ欄の表示と連想配列を作る。
         最小最大がともに1の場合、QLineEditに自動で変更する。
-        
-        :param label: 項目名
-        :param min_lines: 表示の最小行数
-        :param max_lines: 表示の最大行数
         """
-        self.scroll_layout.addWidget(QLabel(f"{label}:"))
+        container = QWidget()
+        layout = QVBoxLayout()
+        container.setLayout(layout)
+        layout.addWidget(QLabel(f"{label}:"))
 
-        if (min_lines == 1 and max_lines == 1):
+        if min_lines == 1 and max_lines == 1:
             widget = QLineEdit()
         else:
             widget = QPlainTextEdit()
@@ -533,10 +529,31 @@ class EntryEditorDialog(QDialog):
             widget.setMinimumHeight(min_lines * self.lh)
             widget.setTabChangesFocus(True)
 
-        #辞書にまとめて保存
+        layout.addWidget(widget)
         self.content_inputs[label] = widget
+        self.content_widgets[label] = container
+        self.scroll_layout.addWidget(container)
 
-        self.scroll_layout.addWidget(widget)
+        if toggleable and toggle_layout is not None:
+            btn = QPushButton(f"{label} を{'非表示' if default_visible else '表示'}")
+            btn.setCheckable(True)
+            btn.setChecked(not default_visible)
+            toggle_layout.addWidget(btn)
+            self.toggle_buttons[label] = btn
+
+            container.setVisible(default_visible)
+
+            def make_toggle(lbl, w, b):
+                def toggle():
+                    visible = not w.isVisible()
+                    w.setVisible(visible)
+                    b.setText(f"{lbl} を{'非表示' if visible else '表示'}")
+                    b.setChecked(not visible)
+                return toggle
+
+            btn.clicked.connect(make_toggle(label, container, btn))
+
+        return container
     
     def _add_translation(self, removable=True):
         """品詞・訳語セットを追加"""
@@ -664,30 +681,35 @@ class EntryEditorDialog(QDialog):
                     trans.get("forms", [])
                 )
         
-        # コンテンツ
+        # コンテンツを読み込んだうえで、トグル対象欄の表示を制御する
+        loaded_titles = set()
         for content in self.existing_entry.get("contents", []):
             title = content.get("title", "")
             text = content.get("text", "")
-
             # title が content_inputs のキーに存在すればセット
             if title in self.content_inputs:
                 try:
                     self.content_inputs[title].setPlainText(text)
                 except:
                     self.content_inputs[title].setText(text)
-        
+                if text:
+                    loaded_titles.add(title)
+
+        # トグル対象のラベルについて、データがあれば表示・なければ非表示にする
+        for label, btn in self.toggle_buttons.items():
+            has_content = label in loaded_titles
+            self.content_widgets[label].setVisible(has_content)
+            btn.setText(f"{label} を{'非表示' if has_content else '表示'}")
+            btn.setChecked(not has_content)
+
         # 関連語
         relations = self.existing_entry.get("relations", [])
         for rel in relations:
             self._add_relation(removable=True)
-            
             rel_entry_id = rel.get("entry", {}).get("id")
             rel_form = rel.get("entry", {}).get("form", "")
-            
-            # IDから見出し語を取得（id_mapを使用）
             if not rel_form and rel_entry_id in self.id_map:
                 rel_form = self.id_map[rel_entry_id]["entry"]["form"]
-            
             self.relation_widgets[-1].set_data(
                 rel.get("title", ""),
                 rel_entry_id,
