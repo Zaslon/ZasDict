@@ -1,3 +1,7 @@
+*{
+    white-space: pre-wrap;
+}
+
 .form{
     font-size: larger;
     font-weight: bold;

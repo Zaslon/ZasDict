@@ -683,6 +683,7 @@ class DictionaryApp(QMainWindow):
         
         for entry in results:
             form = entry["entry"]["form"]
+            id = entry["entry"]["id"]
             
             # 同音異義語の場合は番号を付ける
             display_form = form
@@ -714,23 +715,18 @@ class DictionaryApp(QMainWindow):
             # CSS を HTML に埋め込む
             html = f"""
             <html>
-            <head>
-                <style>
-                {css}
-                </style>
-            </head>
-            <body>
-                {detail_text}
-            </body>
+            <head><style>{css}</style></head>
+            <body>{detail_text}</body>
             </html>
             """
 
             self.detail_view.setHtml(html)
+            # self.detail_view.setPlainText(html)
     
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
         """エントリの詳細をフォーマット。すべて結合した文字列データとして出力する。"""
-        lines = [f"<span class='form'>{entry['entry']['form']}</span><br><br>"]
+        lines = [f"<span class='form'>{entry['entry']['form']}</span>"]
         
         # 訳語
         for translation in entry.get("translations", []):
@@ -757,7 +753,7 @@ class DictionaryApp(QMainWindow):
             rel_form = relation.get("entry", {}).get("form", "")
             lines.append(f"{relation.get('title', '')}: {rel_form}<br>")
         
-        return "\n".join(lines)
+        return "<br>".join(lines)
     
     # ----------------------------------------------------------------
     # イベントハンドラ
@@ -1154,9 +1150,9 @@ class DialectConverterWidget(QWidget):
         self.setMinimumWidth(200)
         self.setMinimumHeight(200)
         
-        self._setup_ui()
+        self._build_ui()
 
-    def _setup_ui(self):
+    def _build_ui(self):
         layout = QVBoxLayout()
         
         # 入力部分
@@ -1226,9 +1222,9 @@ class IPAConverterWidget(QWidget):
         super().__init__(parent)
         self.setWindowTitle("IPA to Spell Converter")
         self.setMinimumSize(200, 200)
-        self.init_ui()
+        self._build_ui()
     
-    def init_ui(self):
+    def _build_ui(self):
         """UIの初期化"""
         layout = QVBoxLayout()
         

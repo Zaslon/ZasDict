@@ -1,16 +1,21 @@
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QFileDialog
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QFileDialog, QDialog, QTextBrowser
 from PySide6.QtCore import QFileSystemWatcher
 import sys
 import csv
 import os
 
 class ChangelogViewerWidget(QWidget):
+    """変更履歴閲覧ウィジェット
+    閲覧のみで編集不可。対称ファイルに変更があれば自動で開きなおす。
+
+    args:
+    filepath 閲覧履歴ファイルのフルパス
+    """
     def __init__(self, filepath = None):
         super().__init__()
         self.setWindowTitle("Changelog Viewer")
 
-        self.text = QTextEdit()
-        self.text.setReadOnly(True)
+        self.text = QTextBrowser()
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.text)
