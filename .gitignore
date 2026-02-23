@@ -4,3 +4,4 @@ activate.bat
 settings.ini
 /*.json
 /*.csv
+*.ttf

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QListWidget, QTextEdit, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
 )
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtGui import QAction, QFont, QFontDatabase
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
 import os
 import sys
@@ -37,30 +37,7 @@ class PreferencesDialog(QDialog):
         self.setWindowTitle("環境設定")
         self.resize(400, 300)
         
-        layout = QVBoxLayout()
-        
-        # ウィンドウサイズ
-        layout.addLayout(self._create_window_size_layout(parent))
-        
-        # フォント
-        layout.addLayout(self._create_font_layout(parent))
-        
-        # フォントサイズ
-        layout.addLayout(self._create_font_size_layout(parent))
-
-        # UIフォント
-        layout.addLayout(self._create_ui_font_layout(parent))
-        
-        # UIフォントサイズ
-        layout.addLayout(self._create_ui_font_size_layout(parent))
-        
-        # 自動保存
-        layout.addLayout(self._create_auto_save_layout(parent))
-        
-        # ボタン
-        layout.addLayout(self._create_button_layout())
-        
-        self.setLayout(layout)
+        self._build_ui(parent)
     
     def _create_window_size_layout(self, parent) -> QHBoxLayout:
         """ウィンドウサイズ設定レイアウト"""
@@ -87,7 +64,8 @@ class PreferencesDialog(QDialog):
         
         self.font_combo = QFontComboBox()
         if parent:
-            self.font_combo.setCurrentFont(parent.search_input.font())
+            saved_font = parent.settings.value("font", const.DEFAULT_FONT_FAMILY)
+            self.font_combo.setCurrentFont(QFont(saved_font))
         
         layout.addWidget(QLabel("フォント:"))
         layout.addWidget(self.font_combo)
@@ -159,6 +137,19 @@ class PreferencesDialog(QDialog):
         layout.addWidget(self.auto_save_check)
         
         return layout
+
+    def _create_idyer_font_layout(self, parent) -> QHBoxLayout:
+        """イジェール語フォント使用設定レイアウト"""
+        layout = QHBoxLayout()
+        
+        self.idyer_font_check = QCheckBox("イジェール文字を有効にする")
+        if parent:
+            idyer_font = parent.settings.value("idyer_font", "false")
+            self.idyer_font_check.setChecked(idyer_font == "true")
+        
+        layout.addWidget(self.idyer_font_check)
+        
+        return layout
     
     def _create_button_layout(self) -> QHBoxLayout:
         """ボタンレイアウト"""
@@ -185,7 +176,37 @@ class PreferencesDialog(QDialog):
             "width": self.width_spin.value(),
             "height": self.height_spin.value(),
             "auto_save": self.auto_save_check.isChecked(),
+            "idyer_font": self.idyer_font_check.isChecked(),
         }
+    
+    def _build_ui(self, parent=None):
+        layout = QVBoxLayout()
+        
+        # ウィンドウサイズ
+        layout.addLayout(self._create_window_size_layout(parent))
+        
+        # フォント
+        layout.addLayout(self._create_font_layout(parent))
+        
+        # フォントサイズ
+        layout.addLayout(self._create_font_size_layout(parent))
+
+        # UIフォント
+        layout.addLayout(self._create_ui_font_layout(parent))
+        
+        # UIフォントサイズ
+        layout.addLayout(self._create_ui_font_size_layout(parent))
+        
+        # 自動保存
+        layout.addLayout(self._create_auto_save_layout(parent))
+
+        # イジェール文字使用
+        layout.addLayout(self._create_idyer_font_layout(parent))
+        
+        # ボタン
+        layout.addLayout(self._create_button_layout())
+        
+        self.setLayout(layout)
 
 
 # ============================================================================
@@ -201,8 +222,8 @@ class DictionaryApp(QMainWindow):
         
         # 設定とデータの初期化
         # このPythonファイルのディレクトリを取得
-        self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        settings_path = os.path.join(self.script_dir, "settings.ini")
+        self.base_path = os.path.dirname(os.path.abspath(__file__))
+        settings_path = os.path.join(self.base_path, "settings.ini")
         self.settings = QSettings(settings_path, QSettings.IniFormat)
 
         self.dictionary_data = {}
@@ -232,16 +253,25 @@ class DictionaryApp(QMainWindow):
         
     
     def _load_settings(self):
-        """設定を読み込む"""
+        """設定を読み込む。
+        
+        PreferencesDialogでiniファイルに保存し、それをQSettingsで読み込むことでダイアログ間で値を受け渡す。
+        """
         font_family = self.settings.value("font", const.DEFAULT_FONT_FAMILY)
-        font_size = int(self.settings.value("size", const.DEFAULT_FONT_SIZE))
+        self.font_size = int(self.settings.value("size", const.DEFAULT_FONT_SIZE))
         ui_font_family = self.settings.value("ui_font", const.DEFAULT_FONT_FAMILY)
         ui_font_size = int(self.settings.value("ui_font_size", const.DEFAULT_FONT_SIZE))
         width = int(self.settings.value("width", const.DEFAULT_WINDOW_WIDTH))
         height = int(self.settings.value("height", const.DEFAULT_WINDOW_HEIGHT))
+
+        self.is_idyer_font = self.settings.value("idyer_font", False, type=bool)
         
         self.resize(width, height)
-        self.default_font = QFont(font_family, font_size)
+        self.default_font = QFont(font_family, self.font_size)
+    
+        # ↓ 初回のみ初期化。Preferences OK 後の再呼び出しではリセットしない
+        if not hasattr(self, '_idyer_font_obj'):
+            self._idyer_font_obj = None
         
         # UIフォントをアプリケーション全体に適用
         ui_font = QFont(ui_font_family, ui_font_size)
@@ -284,6 +314,25 @@ class DictionaryApp(QMainWindow):
         # コンテンツUI（可変サイズ、ストレッチ1で残りの領域を使用）
         main_layout.addLayout(self._create_content_layout(), 1)
 
+    def _idyer_font_select(self, target):
+        """イジェール語表示の有効無効に従ってフォントを返す"""
+
+        if not self.is_idyer_font:
+            target.setFont(QFont(self.default_font))  # コピーを渡す
+            return
+
+        if self._idyer_font_obj is None:  # hasattr ではなく None チェック
+            font_path = os.path.join(self.base_path, const.IDYER_FONT_REGULAR)
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id != -1:
+                families = QFontDatabase.applicationFontFamilies(font_id)
+                if families:
+                    self._idyer_font_obj = QFont(families[0], self.font_size)
+
+        if self._idyer_font_obj is not None:
+            target.setFont(QFont(self._idyer_font_obj))  # コピーを渡す
+        else:
+            target.setFont(QFont(self.default_font))  # フォールバック
     
     def _create_search_layout(self) -> QHBoxLayout:
         """検索レイアウトを作成"""
@@ -293,7 +342,7 @@ class DictionaryApp(QMainWindow):
         self.search_input.setPlaceholderText("検索語を入力...")
         self.search_input.textChanged.connect(self.update_results)
         self.search_input.returnPressed.connect(self._on_search_enter)
-        self.search_input.setFont(self.default_font)
+        self._idyer_font_select(self.search_input)
         
         self.search_mode = QComboBox()
         self.search_mode.addItems(const.SEARCH_MODES)
@@ -317,7 +366,7 @@ class DictionaryApp(QMainWindow):
         self.result_list.currentTextChanged.connect(self.show_detail)
         self.result_list.itemActivated.connect(self._on_result_enter)
         self.result_list.itemDoubleClicked.connect(self._on_result_double_click)
-        self.result_list.setFont(self.default_font)
+        self._idyer_font_select(self.result_list)
         self.result_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.result_list.customContextMenuRequested.connect(self._on_result_right_click)
         
@@ -377,7 +426,7 @@ class DictionaryApp(QMainWindow):
         if not last_file:
             return
         
-        last_file = os.path.join(self.script_dir, last_file)
+        last_file = os.path.join(self.base_path, last_file)
         if not os.path.exists(last_file):
             return
         
@@ -439,7 +488,7 @@ class DictionaryApp(QMainWindow):
             self.search_input.setText("")
             
             # 設定に保存
-            rel_path = os.path.relpath(file_path, self.script_dir)
+            rel_path = os.path.relpath(file_path, self.base_path)
             self.settings.setValue("last_dictionary", rel_path)
             
         except Exception as e:
@@ -570,15 +619,25 @@ class DictionaryApp(QMainWindow):
             return
         
         settings = dialog.get_settings()
-        font = QFont(settings["font"], settings["size"])
         ui_font = QFont(settings["ui_font"], settings["ui_font_size"])
         
-        # フォントとサイズを適用
+        # フォント設定を更新
+        self.default_font = QFont(settings["font"], settings["size"])
+        self.font_size = settings["size"]
+        self.is_idyer_font = settings["idyer_font"]
+
+        # IDYER フォントの有効/無効が切り替わったらオブジェクトをリセット
+        if not self.is_idyer_font:
+            self._idyer_font_obj = None  # 無効化時はリセットしてもOK（再ロード不要）
+
+        # UIフォントをアプリケーション全体に適用
         QApplication.instance().setFont(ui_font)
-        self.result_list.setFont(font)
-        self.detail_view.setFont(font)
-        self.search_input.setFont(font)
         self.resize(settings["width"], settings["height"])
+
+        # IDYER設定を考慮してフォントを適用
+        self._idyer_font_select(self.search_input)
+        self._idyer_font_select(self.result_list)
+        self.detail_view.setFont(QFont(self.default_font))
         
         # 設定を保存
         self.settings.setValue("font", settings["font"])
@@ -588,7 +647,8 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("ui_font", settings["ui_font"])
         self.settings.setValue("ui_font_size", settings["ui_font_size"])
         self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
-
+        self.settings.setValue("idyer_font", "true" if settings["idyer_font"] else "false")
+        
     def open_idyer_converter(self):
         """変換ダイアログを開く"""
         self.id_widget = DialectConverterWidget()
@@ -708,7 +768,7 @@ class DictionaryApp(QMainWindow):
             detail_text = self._format_entry_detail(entry)
 
             # detail.css を読み込む
-            css_path = os.path.join(self.script_dir, "detail.css")
+            css_path = os.path.join(self.base_path, "detail.css")
             with open(css_path, "r", encoding="utf-8") as f:
                 css = f.read()
 

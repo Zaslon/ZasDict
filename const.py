@@ -17,6 +17,9 @@ DEFAULT_WINDOW_HEIGHT = 600
 SEARCH_MODES = ["前方", "部分", "後方", "完全"]
 SEARCH_SCOPES = ["見出し語・訳語", "全文"]
 
+IDYER_FONT_REGULAR = "Fazik-regular.ttf"
+IDYER_FONT_BOLD = "Fazik-bold.ttf"
+
 # 品詞の選択肢（バリデーション用）
 VALID_POS = [
     "名詞",        # 通常名詞・複合名詞
