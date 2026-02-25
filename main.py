@@ -5,7 +5,7 @@ ZasDict - 辞書検索アプリケーション
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QWidgetAction, QVBoxLayout, QHBoxLayout, QSizePolicy,
-    QLineEdit, QComboBox, QListWidget, QTextEdit, QMenuBar, QMenu, QFileDialog,
+    QLineEdit, QComboBox, QListWidget, QTextEdit, QTextBrowser, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
 )
 from PySide6.QtGui import QAction, QFont, QFontDatabase
@@ -142,7 +142,7 @@ class PreferencesDialog(QDialog):
         """イジェール語フォント使用設定レイアウト"""
         layout = QHBoxLayout()
         
-        self.idyer_font_check = QCheckBox("イジェール文字を有効にする")
+        self.idyer_font_check = QCheckBox("Heksaを有効にする")
         if parent:
             idyer_font = parent.settings.value("idyer_font", "false")
             self.idyer_font_check.setChecked(idyer_font == "true")
@@ -270,8 +270,8 @@ class DictionaryApp(QMainWindow):
         self.default_font = QFont(font_family, self.font_size)
     
         # ↓ 初回のみ初期化。Preferences OK 後の再呼び出しではリセットしない
-        if not hasattr(self, '_idyer_font_obj'):
-            self._idyer_font_obj = None
+        if not hasattr(self, '_idyer_font'):
+            self._idyer_font = None
         
         # UIフォントをアプリケーション全体に適用
         ui_font = QFont(ui_font_family, ui_font_size)
@@ -318,21 +318,21 @@ class DictionaryApp(QMainWindow):
         """イジェール語表示の有効無効に従ってフォントを返す"""
 
         if not self.is_idyer_font:
-            target.setFont(QFont(self.default_font))  # コピーを渡す
+            target.setFont(self.default_font)
             return
 
-        if self._idyer_font_obj is None:  # hasattr ではなく None チェック
+        if self._idyer_font is None:  # hasattr ではなく None チェック
             font_path = os.path.join(self.base_path, const.IDYER_FONT_REGULAR)
             font_id = QFontDatabase.addApplicationFont(font_path)
             if font_id != -1:
                 families = QFontDatabase.applicationFontFamilies(font_id)
                 if families:
-                    self._idyer_font_obj = QFont(families[0], self.font_size)
+                    self._idyer_font = families[0]
 
-        if self._idyer_font_obj is not None:
-            target.setFont(QFont(self._idyer_font_obj))  # コピーを渡す
+        if self._idyer_font is not None:
+            target.setFont(QFont(self._idyer_font, self.font_size))
         else:
-            target.setFont(QFont(self.default_font))  # フォールバック
+            target.setFont(self.default_font)  # フォールバック
     
     def _create_search_layout(self) -> QHBoxLayout:
         """検索レイアウトを作成"""
@@ -370,9 +370,9 @@ class DictionaryApp(QMainWindow):
         self.result_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.result_list.customContextMenuRequested.connect(self._on_result_right_click)
         
-        self.detail_view = QTextEdit()
-        self.detail_view.setReadOnly(True)
+        self.detail_view = QTextBrowser()
         self.detail_view.setFont(self.default_font)
+        # self.detail_view.setStyleSheet(""" QTextBrowser { border: none; background: transparent;} """)
         
         layout.addWidget(self.result_list, 1)
         layout.addWidget(self.detail_view, 2)
@@ -628,7 +628,7 @@ class DictionaryApp(QMainWindow):
 
         # IDYER フォントの有効/無効が切り替わったらオブジェクトをリセット
         if not self.is_idyer_font:
-            self._idyer_font_obj = None  # 無効化時はリセットしてもOK（再ロード不要）
+            self._idyer_font = None  # 無効化時はリセットしてもOK（再ロード不要）
 
         # UIフォントをアプリケーション全体に適用
         QApplication.instance().setFont(ui_font)
