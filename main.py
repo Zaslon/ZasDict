@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QListWidget, QTextEdit, QTextBrowser, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
 )
-from PySide6.QtGui import QAction, QFont, QFontDatabase
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
 import os
 import sys
@@ -1220,6 +1220,9 @@ class DialectConverterWidget(QWidget):
         input_label = QLabel("元単語（アクセントは大文字）:")
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("例: nyUryoku")
+
+        # Enter時の挙動
+        self.input_field.returnPressed.connect(self._on_input_enter)
         
         input_layout.addWidget(input_label)
         input_layout.addWidget(self.input_field)
@@ -1246,6 +1249,9 @@ class DialectConverterWidget(QWidget):
         
         self.setLayout(layout)
 
+    def _on_input_enter(self):
+        self.convert()
+
     def convert(self):
         """変換を実行"""
         word = self.input_field.text().strip()
@@ -1270,6 +1276,7 @@ i.a 教: {result['arzafire']}\n---------------\n"""
             self.result_display.setPlainText(f"エラーが発生しました: {str(e)}")
         
         self.input_field.clear()
+        self.result_display.moveCursor(QTextCursor.End)
 
 # ============================================================================
 # IPA画面
@@ -1297,6 +1304,9 @@ class IPAConverterWidget(QWidget):
         self.input_text.setPlaceholderText("IPA記号を入力してください（例: ˈhɛloʊ）")
         self.input_text.setMaximumHeight(100)
         layout.addWidget(self.input_text)
+
+        # Enter時の挙動
+        self.input_text.returnPressed.connect(self._on_input_enter)
         
         # 変換ボタン
         button_layout = QHBoxLayout()
@@ -1337,10 +1347,19 @@ class IPAConverterWidget(QWidget):
         # layout.addLayout(close_layout)
         
         self.setLayout(layout)
+
+    def _on_input_enter(self):
+        self.convert_ipa()
     
     def convert_ipa(self):
         """IPA変換を実行"""
-        input_text = self.input_text.toPlainText().strip()
+        
+        try:
+            # Works for QTextEdit
+            input_text = self.input_text.toPlainText().strip()
+        except AttributeError:
+            # Works for QLineEdit
+            input_text = self.input_text.text().strip()
         
         if not input_text:
             self.output_text.setPlainText("入力がありません")
