@@ -652,12 +652,12 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("idyer_font", "true" if settings["idyer_font"] else "false")
         
     def open_idyer_converter(self):
-        """変換ダイアログを開く"""
+        """変換ウィジェットを開く"""
         self.id_widget = DialectConverterWidget()
         self.id_widget.show()
 
     def open_ipa_converter(self):
-        """IPA変換ダイアログを開く"""
+        """IPA変換ウィジェットを開く"""
         self.ipa_widget = IPAConverterWidget()
         self.ipa_widget.show()
 
