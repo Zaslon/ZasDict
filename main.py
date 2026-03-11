@@ -24,6 +24,7 @@ from kaiomom import convert_idyer
 from ipa import ipaToSpell
 from changelog import ChangelogViewerWidget
 from editor import EntryEditorDialog
+from legend import LegendViewerWidget
 
 # ============================================================================
 # 環境設定ダイアログ
