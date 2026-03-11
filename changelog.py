@@ -1,12 +1,12 @@
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QFileDialog, QDialog, QTextBrowser
-from PySide6.QtCore import QFileSystemWatcher
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QFileDialog, QDialog, QTextBrowser, QScrollBar
+from PySide6.QtCore import QFileSystemWatcher, QTimer
 import sys
 import csv
 import os
 
 class ChangelogViewerWidget(QWidget):
     """変更履歴閲覧ウィジェット
-    閲覧のみで編集不可。対称ファイルに変更があれば自動で開きなおす。
+    閲覧のみで編集不可。対象ファイルに変更があれば自動で開きなおす。
 
     args:
     filepath 閲覧履歴ファイルのフルパス
@@ -43,6 +43,9 @@ class ChangelogViewerWidget(QWidget):
         except Exception as e:
             self.text.setText(f"読み込みエラー: {e}")
 
+        # レイアウト完了後にスクロールさせる
+        QTimer.singleShot(0, self.scroll_to_bottom)
+
     def on_file_changed(self, path):
         # ファイル変更を検知したら再読み込み
         self.load_csv(path)
@@ -50,6 +53,12 @@ class ChangelogViewerWidget(QWidget):
         # Excel などが「削除→再作成」する場合があるため再監視
         if os.path.exists(path) and path not in self.watcher.files():
             self.watcher.addPath(path)
+
+    def scroll_to_bottom(self):
+        bar = self.text.verticalScrollBar()
+        bar.setValue(bar.maximum())
+
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
