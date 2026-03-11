@@ -5,3 +5,4 @@ settings.ini
 /*.json
 /*.csv
 *.ttf
+.vscode
