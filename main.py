@@ -658,6 +658,11 @@ class DictionaryApp(QMainWindow):
         """IPA変換ダイアログを開く"""
         self.ipa_widget = IPAConverterWidget()
         self.ipa_widget.show()
+
+    def open_legend(self):
+        """凡例ウィジェットを開く"""
+        self.legend_widget = LegendViewerWidget(self.dictionary_data)
+        self.legend_widget.show()
     
     def open_dictionary_settings(self):
         """辞書依存設定ダイアログを開く"""
