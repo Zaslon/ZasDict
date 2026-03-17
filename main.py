@@ -6,7 +6,7 @@ ZasDict - 辞書検索アプリケーション
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QWidgetAction, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QLineEdit, QComboBox, QListWidget, QTextEdit, QTextBrowser, QMenuBar, QMenu, QFileDialog,
-    QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox
+    QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox, QTabWidget
 )
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
@@ -406,8 +406,8 @@ class DictionaryApp(QMainWindow):
         
         # ツールメニュー
         tools_menu = menu_bar.addMenu("ツール")
-        tools_menu.addAction(self._create_action("変換", self.open_idyer_converter))
-        tools_menu.addAction(self._create_action("IPA", self.open_ipa_converter))
+        tools_menu.addAction(self._create_action("変換", MultiToolsWidget.open("変換")))
+        tools_menu.addAction(self._create_action("IPA", MultiToolsWidget.open("IPA")))
         tools_menu.addAction(self._create_action("凡例", self.open_legend))
 
         # 設定メニュー
@@ -650,16 +650,6 @@ class DictionaryApp(QMainWindow):
         self.settings.setValue("ui_font_size", settings["ui_font_size"])
         self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
         self.settings.setValue("idyer_font", "true" if settings["idyer_font"] else "false")
-        
-    def open_idyer_converter(self):
-        """変換ウィジェットを開く"""
-        self.id_widget = DialectConverterWidget()
-        self.id_widget.show()
-
-    def open_ipa_converter(self):
-        """IPA変換ウィジェットを開く"""
-        self.ipa_widget = IPAConverterWidget()
-        self.ipa_widget.show()
 
     def open_legend(self):
         """凡例ウィジェットを開く"""
@@ -1203,6 +1193,52 @@ class DictionaryApp(QMainWindow):
             current_title = self.windowTitle()
             if not current_title.endswith("*"):
                 self.setWindowTitle(f"{current_title}*")
+
+# ============================================================================
+# マルチツールタブウィジェット
+# ============================================================================
+
+class MultiToolsWidget(QWidget):
+    """複数ツールをタブでまとめるウィジェット"""
+
+    _instance = None  # シングルトン用クラス変数
+
+    @classmethod
+    def open(cls, tool_type=None, parent=None):
+        """ウィジェットを開く。すでに存在する場合はタブを切り替えるだけ。"""
+        if cls._instance is None or not cls._instance.isVisible():
+            cls._instance = cls(tool_type=tool_type, parent=parent)
+            cls._instance.show()
+        else:
+            cls._instance.activate_tab(tool_type)
+            cls._instance.raise_()
+            cls._instance.activateWindow()
+
+    # タブ名とインデックスのマッピング
+    TAB_MAP = {
+        "IPA": 0,
+        "変換": 1,
+    }
+
+    def __init__(self, tool_type=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Multi Tools")
+        self.setMinimumSize(400, 300)
+
+        self.tab = QTabWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(self.tab)
+        self.setLayout(layout)
+
+        self.tab.addTab(IPAConverterWidget(), "IPA")
+        self.tab.addTab(DialectConverterWidget(), "変換")
+
+        self.activate_tab(tool_type)
+
+    def activate_tab(self, tool_type=None):
+        """tool_typeに対応するタブをアクティブにする"""
+        if tool_type is not None and tool_type in self.TAB_MAP:
+            self.tab.setCurrentIndex(self.TAB_MAP[tool_type])
 
 # ============================================================================
 # 変換画面
