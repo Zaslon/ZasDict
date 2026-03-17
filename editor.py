@@ -486,7 +486,7 @@ class EntryEditorDialog(QDialog):
         self._add_content_input_widget("語法")
         self._add_content_input_widget("文化", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
         self._add_content_input_widget("用例", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
-        self._add_content_input_widget("語源")
+        self._add_content_input_widget("語源", 1, 1)
 
         self.scroll_layout.addWidget(QLabel("関連語:"))
         self.relation_container = QVBoxLayout()
