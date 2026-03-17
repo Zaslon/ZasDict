@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QListWidget, QTextEdit, QTextBrowser, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox, QTabWidget
 )
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor, QFontMetrics
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
 import os
 import sys
@@ -269,14 +269,14 @@ class DictionaryApp(QMainWindow):
         
         self.resize(width, height)
         self.default_font = QFont(font_family, self.font_size)
+        self.ui_font = QFont(ui_font_family, ui_font_size)
     
         # ↓ 初回のみ初期化。Preferences OK 後の再呼び出しではリセットしない
         if not hasattr(self, '_idyer_font'):
             self._idyer_font = None
         
         # UIフォントをアプリケーション全体に適用
-        ui_font = QFont(ui_font_family, ui_font_size)
-        QApplication.instance().setFont(ui_font)
+        QApplication.setFont(self.ui_font)
     
     def _init_search_worker(self):
         """検索ワーカーを初期化"""
@@ -288,8 +288,10 @@ class DictionaryApp(QMainWindow):
 
     def update_word_count(self):
         """単語数表示の更新"""
-        count = len(self.dictionary_data.get("words", {}))
-        self.label.setText(str(count))
+        count = str(len(self.dictionary_data.get("words", {})))
+        self.label.setText(count)
+        fm = QFontMetrics(self.label.font())
+        self.label.setMinimumWidth(fm.horizontalAdvance(count) + 10)
     
     def _build_ui(self):
         """UIを構築"""
@@ -297,21 +299,17 @@ class DictionaryApp(QMainWindow):
         main_layout = QVBoxLayout()
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
-        
-        # メニューバー
-        menu_layout = QHBoxLayout()
 
-        main_layout.addLayout(menu_layout, 0)
+        # メニューバーを作成してセット
+        menu_bar = self._create_menu_bar()
+        self.setMenuBar(menu_bar)
 
-        # 右端に表示したい文字列
-        self.label.setStyleSheet("padding-right: 10px;")  # 少し余白をつけると綺麗
-
-        menu_layout.addWidget(self._create_menu_bar())
-        menu_layout.addWidget(self.label)
+        # メニューバー右端にラベルを追加
+        menu_bar.setCornerWidget(self.label, Qt.TopRightCorner) 
 
         # 検索UI（固定サイズ、ストレッチ0）
         main_layout.addLayout(self._create_search_layout(), 0)
-        
+
         # コンテンツUI（可変サイズ、ストレッチ1で残りの領域を使用）
         main_layout.addLayout(self._create_content_layout(), 1)
 
@@ -382,20 +380,11 @@ class DictionaryApp(QMainWindow):
     
     def _create_menu_bar(self):
         """メニューバーを作成"""
-        layout = QHBoxLayout()
-        
-        menu_bar = self.menuBar()
+        menu_bar = QMenuBar(self)
 
-        # フォントメトリクスを取得して高さを計算
-        font_metrics = menu_bar.fontMetrics()
-        item_padding = int(font_metrics.height() * 0.3)  # フォント高さの30%
-        
-        menu_bar.setStyleSheet(f"""
-            QMenuBar::item {{
-                padding: {item_padding}px 8px;
-            }}
-        """)
-        
+        # アプリケーションフォントを明示的に適用
+        menu_bar.setFont(self.ui_font)
+
         # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
         file_menu.addAction(self._create_action("開く", self.open_file))
@@ -403,17 +392,20 @@ class DictionaryApp(QMainWindow):
         file_menu.addAction(self._create_action("名前を付けて保存", self.save_as_file))
         file_menu.addAction(self._create_action("更新履歴", self.open_changelog_viwer))
         file_menu.addAction(self._create_action("終了", self.close))
-        
+
         # ツールメニュー
         tools_menu = menu_bar.addMenu("ツール")
+        tools_menu.setFont(self.ui_font)
         tools_menu.addAction(self._create_action("変換", lambda: MultiToolsWidget.open("変換")))
         tools_menu.addAction(self._create_action("IPA", lambda: MultiToolsWidget.open("IPA")))
         tools_menu.addAction(self._create_action("凡例", self.open_legend))
+        tools_menu.setFont(self.ui_font)
 
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
         settings_menu.addAction(self._create_action("環境設定", self.open_preferences))
         settings_menu.addAction(self._create_action("辞書依存設定", self.open_dictionary_settings))
+
         return menu_bar
 
     def _create_action(self, text: str, slot) -> QAction:
