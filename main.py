@@ -406,8 +406,8 @@ class DictionaryApp(QMainWindow):
         
         # ツールメニュー
         tools_menu = menu_bar.addMenu("ツール")
-        tools_menu.addAction(self._create_action("変換", MultiToolsWidget.open("変換")))
-        tools_menu.addAction(self._create_action("IPA", MultiToolsWidget.open("IPA")))
+        tools_menu.addAction(self._create_action("変換", lambda: MultiToolsWidget.open("変換")))
+        tools_menu.addAction(self._create_action("IPA", lambda: MultiToolsWidget.open("IPA")))
         tools_menu.addAction(self._create_action("凡例", self.open_legend))
 
         # 設定メニュー
