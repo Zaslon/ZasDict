@@ -1340,7 +1340,7 @@ class IPAConverterWidget(QWidget):
         
         # 入力セクション
         input_label = QLabel("IPA入力:")
-        input_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        # input_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         layout.addWidget(input_label)
         
         self.input_text = QLineEdit()
@@ -1370,7 +1370,7 @@ class IPAConverterWidget(QWidget):
         
         # 出力セクション
         output_label = QLabel("変換結果:")
-        output_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        # output_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         layout.addWidget(output_label)
         
         self.output_text = QTextEdit()
