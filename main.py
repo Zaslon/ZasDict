@@ -14,6 +14,8 @@ import os
 import sys
 import json
 import csv
+import socket
+import hashlib
 from datetime import datetime
 from functools import cmp_to_key
 from typing import Dict, List, Set, Tuple, Optional
@@ -132,7 +134,7 @@ class PreferencesDialog(QDialog):
         
         self.auto_save_check = QCheckBox("自動上書き保存を有効にする")
         if parent:
-            auto_save = parent.settings.value("auto_save", "false")
+            auto_save = parent._read_ini("auto_save", "false", group=parent.pc_name)
             self.auto_save_check.setChecked(auto_save == "true")
         
         layout.addWidget(self.auto_save_check)
@@ -145,7 +147,7 @@ class PreferencesDialog(QDialog):
         
         self.idyer_font_check = QCheckBox("Heksaを有効にする")
         if parent:
-            idyer_font = parent.settings.value("idyer_font", "false")
+            idyer_font = parent._read_ini("idyer_font", "false", group=parent.pc_name)
             self.idyer_font_check.setChecked(idyer_font == "true")
         
         layout.addWidget(self.idyer_font_check)
@@ -220,6 +222,7 @@ class DictionaryApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(const.APP_TITLE)
+        self.pc_name = socket.gethostname()
         
         # 設定とデータの初期化
         # このPythonファイルのディレクトリを取得
@@ -251,21 +254,28 @@ class DictionaryApp(QMainWindow):
         
         # UIの構築
         self._build_ui()
-        
+
+    def _hash_value(self, value: str) -> str:
+        """値をSHA-256でハッシュ化して返す"""
+        return hashlib.sha256(value.encode()).hexdigest()        
     
     def _load_settings(self):
         """設定を読み込む。
         
         PreferencesDialogでiniファイルに保存し、それをQSettingsで読み込むことでダイアログ間で値を受け渡す。
+        PCごとに設定を分ける
         """
-        font_family = self.settings.value("font", const.DEFAULT_FONT_FAMILY)
-        self.font_size = int(self.settings.value("size", const.DEFAULT_FONT_SIZE))
-        ui_font_family = self.settings.value("ui_font", const.DEFAULT_FONT_FAMILY)
-        ui_font_size = int(self.settings.value("ui_font_size", const.DEFAULT_FONT_SIZE))
-        width = int(self.settings.value("width", const.DEFAULT_WINDOW_WIDTH))
-        height = int(self.settings.value("height", const.DEFAULT_WINDOW_HEIGHT))
+        font_family     = self._read_ini("font",            const.DEFAULT_FONT_FAMILY,   group=self.pc_name)
+        self.font_size  = int(self._read_ini("size",         const.DEFAULT_FONT_SIZE,     group=self.pc_name))
+        ui_font_family  = self._read_ini("ui_font",          const.DEFAULT_FONT_FAMILY,   group=self.pc_name)
+        ui_font_size    = int(self._read_ini("ui_font_size", const.DEFAULT_FONT_SIZE,     group=self.pc_name))
+        width           = int(self._read_ini("width",        const.DEFAULT_WINDOW_WIDTH,  group=self.pc_name))
+        height          = int(self._read_ini("height",       const.DEFAULT_WINDOW_HEIGHT, group=self.pc_name))
 
-        self.is_idyer_font = self.settings.value("idyer_font", False, type=bool)
+        self.is_idyer_font = self._read_ini("idyer_font", False, group=self.pc_name) in ("True", "true", True)
+
+        self.last_file = self._read_ini("last_dictionary", "",      group=self.pc_name)
+        self.auto_save = self._read_ini("auto_save",       "false", group=self.pc_name)
         
         self.resize(width, height)
         self.default_font = QFont(font_family, self.font_size)
@@ -371,7 +381,6 @@ class DictionaryApp(QMainWindow):
         
         self.detail_view = QTextBrowser()
         self.detail_view.setFont(self.default_font)
-        # self.detail_view.setStyleSheet(""" QTextBrowser { border: none; background: transparent;} """)
         
         layout.addWidget(self.result_list, 1)
         layout.addWidget(self.detail_view, 2)
@@ -416,7 +425,7 @@ class DictionaryApp(QMainWindow):
     
     def _load_last_dictionary(self):
         """前回開いた辞書ファイルを読み込む"""
-        last_file = self.settings.value("last_dictionary", "")
+        last_file = self.last_file
         if not last_file:
             return
         
@@ -451,7 +460,7 @@ class DictionaryApp(QMainWindow):
 
         # changelogパスを設定（ファイルが存在しなくてもパスは設定）
         base_path = os.path.splitext(file_path)[0]
-        self.changelog_path = f"{base_path}_changelog.csv"  # ← この行を追加
+        self.changelog_path = f"{base_path}_changelog.csv"
         
         # タイトルを更新
         file_name = os.path.basename(file_path)
@@ -483,7 +492,7 @@ class DictionaryApp(QMainWindow):
             
             # 設定に保存
             rel_path = os.path.relpath(file_path, self.base_path)
-            self.settings.setValue("last_dictionary", rel_path)
+            self._write_ini({"last_dictionary": rel_path}, group=self.pc_name)
             
         except Exception as e:
             QMessageBox.critical(self, "読み込みエラー", str(e))
@@ -542,7 +551,7 @@ class DictionaryApp(QMainWindow):
     
     def _auto_save_if_enabled(self):
         """自動保存が有効な場合に保存を実行"""
-        auto_save = self.settings.value("auto_save", "false")
+        auto_save = self.auto_save
         if auto_save == "true" and self.current_file_path:
             self._save_to_file(self.current_file_path)
 
@@ -600,6 +609,37 @@ class DictionaryApp(QMainWindow):
         
         self.widget = ChangelogViewerWidget(self.changelog_path)
         self.widget.show()
+
+    def _write_ini(self, values: dict, group=None):
+        """
+        values: {"key": value, ...} の形式で渡す
+        group: セクション名。Noneの場合はグループなしで保存
+        グループ名はハッシュ化して保存する
+        """
+        if group:
+            hashed_group = self._hash_value(group)
+            self.settings.beginGroup(hashed_group)
+        for key, value in values.items():
+            self.settings.setValue(key, value)
+        if group:
+            self.settings.endGroup()
+
+    def _read_ini(self, key: str, default=None, group=None) -> str:
+        """
+        key: 読み込むキー文字列
+        default: キーが存在しない場合のデフォルト値
+        group: セクション名。Noneの場合はグループなしで読み込み
+        グループ名はハッシュ化して読み込む
+
+        戻り値: 値の文字列
+        """
+        if group:
+            hashed_group = self._hash_value(group)
+            self.settings.beginGroup(hashed_group)
+        value = self.settings.value(key, default)
+        if group:
+            self.settings.endGroup()
+        return str(value) if value is not None else default
     
     
     # ----------------------------------------------------------------
@@ -634,14 +674,16 @@ class DictionaryApp(QMainWindow):
         self.detail_view.setFont(QFont(self.default_font))
         
         # 設定を保存
-        self.settings.setValue("font", settings["font"])
-        self.settings.setValue("size", settings["size"])
-        self.settings.setValue("width", settings["width"])
-        self.settings.setValue("height", settings["height"])
-        self.settings.setValue("ui_font", settings["ui_font"])
-        self.settings.setValue("ui_font_size", settings["ui_font_size"])
-        self.settings.setValue("auto_save", "true" if settings["auto_save"] else "false")
-        self.settings.setValue("idyer_font", "true" if settings["idyer_font"] else "false")
+        self._write_ini({
+            "font":         settings["font"],
+            "size":         settings["size"],
+            "width":        settings["width"],
+            "height":       settings["height"],
+            "ui_font":      settings["ui_font"],
+            "ui_font_size": settings["ui_font_size"],
+            "auto_save":    "true" if settings["auto_save"] else "false",
+            "idyer_font":   "true" if settings["idyer_font"] else "false",
+        }, group=self.pc_name)
 
     def open_legend(self):
         """凡例ウィジェットを開く"""
@@ -835,8 +877,10 @@ class DictionaryApp(QMainWindow):
         self.thread.wait()
         
         # ウィンドウサイズを保存
-        self.settings.setValue("width", self.width())
-        self.settings.setValue("height", self.height())
+        self._write_ini({
+            "width":  self.width(),
+            "height": self.height(),
+        }, group=self.pc_name)
         
         super().closeEvent(event)
 
