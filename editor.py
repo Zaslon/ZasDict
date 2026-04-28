@@ -47,10 +47,10 @@ class TranslationWidget(QWidget):
         
         # 削除ボタン（最初の1つ以外に表示）
         if self.removable:
-            remove_btn = QPushButton("－")
-            remove_btn.setMaximumWidth(30)
-            remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
-            layout.addWidget(remove_btn)
+            self.remove_btn = QPushButton("－")
+            self.remove_btn.setMaximumWidth(30)
+            self.remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+            layout.addWidget(self.remove_btn)
         
         self.setLayout(layout)
     
@@ -113,10 +113,10 @@ class RelationWidget(QWidget):
         
         # 削除ボタン
         if self.removable:
-            remove_btn = QPushButton("－")
-            remove_btn.setMaximumWidth(30)
-            remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
-            layout.addWidget(remove_btn)
+            self.remove_btn = QPushButton("－")
+            self.remove_btn.setMaximumWidth(30)
+            self.remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+            layout.addWidget(self.remove_btn)
         
         self.setLayout(layout)
     
@@ -335,7 +335,7 @@ class EntryEditorDialog(QDialog):
         self.initial_form = initial_form
         self.existing_entry = existing_entry  # 既存エントリの内容を渡す
         self.is_edit_mode = is_edit_mode # 新規作成か既存の編集か。既存エントリ編集時はTrueとする。
-        self.entry_id = -1 # ID設定は登録時に更新する
+        self.entry_id = -1 # ID設定は登録時に更新する。-1は無効値
 
         fm = QFontMetrics(self.font())
         self.lh = 1.4*fm.height()
@@ -467,13 +467,15 @@ class EntryEditorDialog(QDialog):
         self.form_input.setText(self.initial_form)
         self.scroll_layout.addWidget(self.form_input)
 
+        self.widgets = []
+
         self.scroll_layout.addWidget(QLabel("品詞・訳語:"))
         self.translation_container = QVBoxLayout()
-        self._add_translation(removable=False)
-        add_trans_btn = QPushButton("＋ 品詞・訳語を追加")
-        add_trans_btn.clicked.connect(lambda: self._add_translation(removable=True))
+        self.widgets.append(self._add_translation(removable=False))
+        self.add_trans_btn = QPushButton("＋ 品詞・訳語を追加")
+        self.add_trans_btn.clicked.connect(lambda: self.widgets.append(self._add_translation(removable=True)))
         self.scroll_layout.addLayout(self.translation_container)
-        self.scroll_layout.addWidget(add_trans_btn)
+        self.scroll_layout.addWidget(self.add_trans_btn)
 
         self.content_widgets = {}
         self.toggle_buttons = {}
@@ -483,38 +485,38 @@ class EntryEditorDialog(QDialog):
         main_layout.addLayout(toggle_layout)  # スクロール外に置く
 
         self._add_content_input_widget("発音記号", 1, 1)
-        self._add_content_input_widget("語法")
-        self._add_content_input_widget("文化", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
-        self._add_content_input_widget("用例", toggleable=True, toggle_layout=toggle_layout, default_visible=False)
+        self._add_content_input_widget("語法", 2, 5)
+        self._add_content_input_widget("文化", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
+        self._add_content_input_widget("用例", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
         self._add_content_input_widget("語源", 1, 1)
 
         self.scroll_layout.addWidget(QLabel("関連語:"))
         self.relation_container = QVBoxLayout()
-        add_rel_btn = QPushButton("＋ 関連語を追加")
-        add_rel_btn.clicked.connect(lambda: self._add_relation(removable=True))
+        self.add_rel_btn = QPushButton("＋ 関連語を追加")
+        self.add_rel_btn.clicked.connect(lambda: self._add_relation(removable=True))
         self.scroll_layout.addLayout(self.relation_container)
-        self.scroll_layout.addWidget(add_rel_btn)
+        self.scroll_layout.addWidget(self.add_rel_btn)
 
         self.scroll_layout.addStretch()
 
         button_layout = QHBoxLayout()
-        ok_btn = QPushButton("OK")
-        cancel_btn = QPushButton("キャンセル")
-        ok_btn.clicked.connect(self.accept)
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(ok_btn)
-        button_layout.addWidget(cancel_btn)
+        self.ok_btn = QPushButton("OK")
+        self.cancel_btn = QPushButton("キャンセル")
+        self.ok_btn.clicked.connect(self.accept)
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.ok_btn)
+        button_layout.addWidget(self.cancel_btn)
 
         main_layout.addWidget(scroll)
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
-
 
     def _add_content_input_widget(self, label, min_lines=1, max_lines=3,
                                 toggleable=False, toggle_layout=None, default_visible=True):
         """
         コンテンツ欄の表示と連想配列を作る。
         最小最大がともに1の場合、QLineEditに自動で変更する。
+        togglableをTrueにすると、表示/日表示切替ボタンをtoggle_layoutに表示する。
         """
         container = QWidget()
         layout = QVBoxLayout()
@@ -556,12 +558,27 @@ class EntryEditorDialog(QDialog):
         return container
     
     def _add_translation(self, removable=True):
-        """品詞・訳語セットを追加"""
+        """品詞・訳語セットを追加。widgetを返す。"""
         widget = TranslationWidget(removable=removable, parent=self)
         widget.remove_requested.connect(self._remove_translation)
         self.translation_container.addWidget(widget)
         self.translation_widgets.append(widget)
+
+        self._rebuild_tab_order()
+
+        return widget
     
+    def _rebuild_tab_order(self):
+        """translation_widgets のタブ順をすべて再構築する"""
+        widgets = self.translation_widgets
+
+        if not widgets:
+            return
+
+        # 最初のウィジェットから順にタブ順を設定
+        for prev, curr in zip(widgets, widgets[1:]):
+            self.setTabOrder(prev, curr)
+
     def _remove_translation(self, widget):
         """品詞・訳語セットを削除"""
         self.translation_widgets.remove(widget)
@@ -579,7 +596,7 @@ class EntryEditorDialog(QDialog):
         widget.remove_requested.connect(self._remove_relation)
         self.relation_container.addWidget(widget)
         self.relation_widgets.append(widget)
-    
+
     def _remove_relation(self, widget):
         """関連語セットを削除"""
         self.relation_widgets.remove(widget)

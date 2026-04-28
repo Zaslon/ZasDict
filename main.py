@@ -352,7 +352,13 @@ class DictionaryApp(QMainWindow):
         self.search_input.textChanged.connect(self.update_results)
         self.search_input.returnPressed.connect(self._on_search_enter)
         self._idyer_font_select(self.search_input)
-        
+        # 現在のフォントを取得
+        font = self.search_input.font()
+        # サイズだけ変更（例: 12ポイント）
+        font.setPointSize(self.ui_font.pointSize())
+        # フォントを再設定
+        self.search_input.setFont(font)
+
         self.search_mode = QComboBox()
         self.search_mode.addItems(const.SEARCH_MODES)
         self.search_mode.currentTextChanged.connect(self._on_search_options_changed)
@@ -360,6 +366,10 @@ class DictionaryApp(QMainWindow):
         self.search_scope = QComboBox()
         self.search_scope.addItems(const.SEARCH_SCOPES)
         self.search_scope.currentTextChanged.connect(self._on_search_options_changed)
+
+        # コンボボックスの推奨される高さに合わせる
+        height = self.search_mode.sizeHint().height()
+        self.search_input.setFixedHeight(height)
         
         layout.addWidget(self.search_input)
         layout.addWidget(self.search_mode)
@@ -391,8 +401,8 @@ class DictionaryApp(QMainWindow):
         """メニューバーを作成"""
         menu_bar = QMenuBar(self)
 
-        # アプリケーションフォントを明示的に適用
-        menu_bar.setFont(self.ui_font)
+        # アプリケーションフォントを明示的に適用するとおかしくなる
+        # menu_bar.setFont(self.ui_font)
 
         # ファイルメニュー
         file_menu = menu_bar.addMenu("ファイル")
@@ -404,11 +414,9 @@ class DictionaryApp(QMainWindow):
 
         # ツールメニュー
         tools_menu = menu_bar.addMenu("ツール")
-        tools_menu.setFont(self.ui_font)
         tools_menu.addAction(self._create_action("変換", lambda: MultiToolsWidget.open("変換")))
         tools_menu.addAction(self._create_action("IPA", lambda: MultiToolsWidget.open("IPA")))
         tools_menu.addAction(self._create_action("凡例", self.open_legend))
-        tools_menu.setFont(self.ui_font)
 
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
@@ -493,6 +501,10 @@ class DictionaryApp(QMainWindow):
             # 設定に保存
             rel_path = os.path.relpath(file_path, self.base_path)
             self._write_ini({"last_dictionary": rel_path}, group=self.pc_name)
+
+            # iniファイルから辞書ファイルを読み込み
+            self._load_last_dictionary()
+            self.update_word_count()
             
         except Exception as e:
             QMessageBox.critical(self, "読み込みエラー", str(e))
@@ -802,6 +814,9 @@ class DictionaryApp(QMainWindow):
             css_path = os.path.join(self.base_path, "detail.css")
             with open(css_path, "r", encoding="utf-8") as f:
                 css = f.read()
+            
+            size = int(1.5 * self.default_font.pointSize())
+            css += f""".form{{ font-size: {size}px ; font-weight: bold; }}"""
 
             # CSS を HTML に埋め込む
             html = f"""
