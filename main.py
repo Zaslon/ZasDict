@@ -815,8 +815,8 @@ class DictionaryApp(QMainWindow):
             with open(css_path, "r", encoding="utf-8") as f:
                 css = f.read()
             
-            size = int(1.5 * self.default_font.pointSize())
-            css += f""".form{{ font-size: {size}px ; font-weight: bold; }}"""
+            # size = 1.5
+            # css += f""".form{{ font-size: {size}em ; font-weight: bold; }}"""
 
             # CSS を HTML に埋め込む
             html = f"""
@@ -832,8 +832,14 @@ class DictionaryApp(QMainWindow):
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
         """エントリの詳細をフォーマット。すべて結合した文字列データとして出力する。"""
-        lines = [f"<span class='form'>{entry['entry']['form']}</span>"]
-        
+        lines = [f"<h2 class='form'>{entry['entry']['form']}</h2>"]
+
+        # 内容
+        for content in entry.get("contents", []):
+            if content.get('title', '') == '発音記号' and content.get('text', '') != '':
+                lines.append(f"/{content.get('text', '')}/<br>")
+                break
+
         # 訳語
         for translation in entry.get("translations", []):
             lines.append(f"<span class='pos'>{translation.get('title', '')}</span>")
@@ -847,8 +853,8 @@ class DictionaryApp(QMainWindow):
         
         # 内容
         for content in entry.get("contents", []):
-            lines.append(f"{content.get('title', '')}: {content.get('text', '')}<br>")
-        lines.append("<br>")
+            if content.get('title', '') != '発音記号':
+                lines.append(f"{content.get('title', '')}: {content.get('text', '')}<br>")
         
         # バリエーション
         # for variation in entry.get("variations", []):
