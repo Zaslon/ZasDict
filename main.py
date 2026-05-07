@@ -814,9 +814,6 @@ class DictionaryApp(QMainWindow):
             css_path = os.path.join(self.base_path, "detail.css")
             with open(css_path, "r", encoding="utf-8") as f:
                 css = f.read()
-            
-            # size = 1.5
-            # css += f""".form{{ font-size: {size}em ; font-weight: bold; }}"""
 
             # CSS を HTML に埋め込む
             html = f"""
@@ -831,41 +828,65 @@ class DictionaryApp(QMainWindow):
     
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
-        """エントリの詳細をフォーマット。すべて結合した文字列データとして出力する。"""
-        lines = [f"<h2 class='form'>{entry['entry']['form']}</h2>"]
+        """指定フォーマットに従ってエントリ詳細をテキストとして出力する。"""
 
-        # 内容
+        lines = []
+
+        # --- form ---
+        lines.append("<h3 class='form'>")
+        form = entry["entry"]["form"]
+        lines.append(f"{form}")
+        lines.append("</h3>")
+
+        # --- 発音記号 ---
+        pron = None
         for content in entry.get("contents", []):
-            if content.get('title', '') == '発音記号' and content.get('text', '') != '':
-                lines.append(f"/{content.get('text', '')}/<br>")
+            if content.get("title") == "発音記号" and content.get("text"):
+                pron = content['text']
                 break
+        if pron:
+            lines.append("<div class='pron'>")
+            lines.append(f"/{pron}/")
+            lines.append("</div>")
 
-        # 訳語
-        for translation in entry.get("translations", []):
-            lines.append(f"<span class='pos'>{translation.get('title', '')}</span>")
-            forms = ", ".join(translation.get("forms", []))
-            lines.append(f":{forms}<br>")
-        
-        # タグ
-        # tags = entry.get("tags", [])
-        # if tags:
-        #     lines.append(f"タグ: {', '.join(tags)}")
-        
-        # 内容
+        # --- translations ---
+        lines.append("<div class='translations'>")
+        translations = entry.get("translations", [])
+        for i, tr in enumerate(translations, start=1):
+            title = tr.get("title", "")
+            forms = ", ".join(tr.get("forms", []))
+            lines.append(f"{i}. {title}：{forms}")
+        lines.append("</div>")
+
+        # --- contents（発音記号以外） ---
         for content in entry.get("contents", []):
-            if content.get('title', '') != '発音記号':
-                lines.append(f"{content.get('title', '')}: {content.get('text', '')}<br>")
-        
-        # バリエーション
-        # for variation in entry.get("variations", []):
-        #     lines.append(f"{variation.get('title', '')}: {variation.get('form', '')}")
-        
-        # 関連語
-        for relation in entry.get("relations", []):
-            rel_form = relation.get("entry", {}).get("form", "")
-            lines.append(f"{relation.get('title', '')}: {rel_form}<br>")
-        
-        return "<br>".join(lines)
+            if content.get("title") != "発音記号":
+                lines.append("<div class='contents'>")
+                title = content.get("title", "")
+                text = content.get("text", "")
+                lines.append(f"{title}：{text}")
+                lines.append("</div>")
+
+        # --- relations（title ごとにまとめる） ---
+        relation_map = {}
+        for rel in entry.get("relations", []):
+            title = rel.get("title", "")
+            text = rel.get("entry", {}).get("form", "")
+            if title not in relation_map:
+                relation_map[title] = []
+            relation_map[title].append(text)
+
+        # relations が存在するときだけ追加
+        if relation_map:
+            lines.append("<div class='relations'>")
+            for title, forms in relation_map.items():
+                joined = ", ".join(forms)
+                lines.append(f"【{title}】{joined}")
+            lines.append("</div>")
+
+
+        return "\n".join(lines)
+
     
     # ----------------------------------------------------------------
     # イベントハンドラ
