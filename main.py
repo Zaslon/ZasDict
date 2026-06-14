@@ -21,7 +21,8 @@ from functools import cmp_to_key
 from typing import Dict, List, Set, Tuple, Optional
 
 import const
-from func import DictionaryLoader, SearchWorker
+from func import DictionaryLoader
+from search_process import SearchClient
 from kaiomom import convert_idyer
 from ipa import ipaToSpell
 from changelog import ChangelogViewerWidget
@@ -289,12 +290,12 @@ class DictionaryApp(QMainWindow):
         QApplication.setFont(self.ui_font)
     
     def _init_search_worker(self):
-        """検索ワーカーを初期化"""
-        self.thread = QThread()
-        self.worker = SearchWorker(self.search_index, self.id_map, self.dictionary_data)
-        self.worker.moveToThread(self.thread)
-        self.thread.start()
-        self.worker.finished.connect(self.on_search_finished)
+        """検索ワーカー（別プロセス）を初期化"""
+        self.search_client = SearchClient(
+            self.search_index, self.id_map, self.dictionary_data
+        )
+        self.search_client.finished.connect(self.on_search_finished)
+        self.search_client.start()
 
     def update_word_count(self):
         """単語数表示の更新"""
@@ -458,9 +459,8 @@ class DictionaryApp(QMainWindow):
         )
         
         # ワーカーが存在する場合はインデックスを更新
-        if hasattr(self, 'worker'):
-            self.worker.index = self.search_index
-            self.worker.id_map = self.id_map
+        if hasattr(self, 'search_client'):
+            self.search_client.update_index(self.search_index, self.id_map)
         
         # 現在のファイルパスを記憶
         self.current_file_path = file_path
@@ -737,8 +737,7 @@ class DictionaryApp(QMainWindow):
         self.search_index, self.id_map = DictionaryLoader.build_search_index(
             self.dictionary_data
         )
-        self.worker.index = self.search_index
-        self.worker.id_map = self.id_map
+        self.search_client.update_index(self.search_index, self.id_map)
         
         QMessageBox.information(
             self,
@@ -765,38 +764,33 @@ class DictionaryApp(QMainWindow):
         self.job_counter += 1
         job_id = self.job_counter
         self.latest_job_id = job_id
-        
-        QMetaObject.invokeMethod(
-            self.worker,
-            "run_search",
-            Qt.QueuedConnection,
-            Q_ARG(int, job_id),
-            Q_ARG(str, self.search_mode.currentText()),
-            Q_ARG(str, self.search_scope.currentText()),
-            Q_ARG(str, text)
+
+        self.search_client.run_search(
+            job_id,
+            self.search_mode.currentText(),
+            self.search_scope.currentText(),
+            text
         )
     
-    def on_search_finished(self, job_id: int, results: List[Dict]):
-        """検索完了時の処理"""
+    def on_search_finished(self, job_id: int, ids: List[str]):
+        """検索完了時の処理（別プロセスから word_id 列を受け取る）"""
         if job_id != self.latest_job_id:
             return
-        
-        self.result_list.clear()
-        self.result_entries = []  # インデックス順にエントリを保持
-        
-        for entry in results:
+
+        # word_id からエントリ本体を復元（id_map はメイン側で保持）
+        entries = [self.id_map[i] for i in ids if i in self.id_map]
+        self.result_entries = entries
+
+        # 同音異義語の連番付けを 1 パスで行う
+        counts = {}
+        labels = []
+        for entry in entries:
             form = entry["entry"]["form"]
-            id = entry["entry"]["id"]
-            
-            # 同音異義語の場合は番号を付ける
-            display_form = form
-            count = sum(1 for e in self.result_entries 
-                       if e["entry"]["form"] == form)
-            if count > 0:
-                display_form = f"{form} ({count + 1})"
-            
-            self.result_list.addItem(display_form)
-            self.result_entries.append(entry)
+            counts[form] = counts.get(form, 0) + 1
+            labels.append(form if counts[form] == 1 else f"{form} ({counts[form]})")
+
+        self.result_list.clear()
+        self.result_list.addItems(labels)
     
     def show_detail(self, selected_text: str):
         """詳細を表示"""
@@ -915,9 +909,8 @@ class DictionaryApp(QMainWindow):
                 return
             # No の場合は保存せずに終了
         
-        self.thread.quit()
-        self.thread.wait()
-        
+        self.search_client.shutdown()
+
         # ウィンドウサイズを保存
         self._write_ini({
             "width":  self.width(),
@@ -1082,8 +1075,7 @@ class DictionaryApp(QMainWindow):
         )
         
         # ワーカーのインデックスを更新
-        self.worker.index = self.search_index
-        self.worker.id_map = self.id_map
+        self.search_client.update_index(self.search_index, self.id_map)
         
         QMessageBox.information(
             self,
@@ -1133,8 +1125,7 @@ class DictionaryApp(QMainWindow):
         )
         
         # ワーカーのインデックスを更新
-        self.worker.index = self.search_index
-        self.worker.id_map = self.id_map
+        self.search_client.update_index(self.search_index, self.id_map)
         
         QMessageBox.information(
             self,
@@ -1208,8 +1199,7 @@ class DictionaryApp(QMainWindow):
         )
         
         # ワーカーのインデックスを更新
-        self.worker.index = self.search_index
-        self.worker.id_map = self.id_map
+        self.search_client.update_index(self.search_index, self.id_map)
         
         QMessageBox.information(
             self,
@@ -1608,6 +1598,9 @@ class DictionarySettingsDialog(QDialog):
 
 def main():
     """アプリケーションのエントリーポイント"""
+    import multiprocessing
+    multiprocessing.freeze_support()  # Windows/凍結ビルドでの子プロセス起動対策
+
     app = QApplication(sys.argv)
     window = DictionaryApp()
     window.show()
