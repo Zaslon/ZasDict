@@ -1139,19 +1139,21 @@ class DictionaryApp(QMainWindow):
         entry_data = dialog.get_entry_data()
         entry_id = entry_data["entry"]["id"]
         form = entry_data["entry"]["form"]
-        
+        old_form = dialog.existing_entry["entry"]["form"] if dialog.existing_entry else form
+
         # 既存エントリを検索して更新
         words = self.dictionary_data.get("words", [])
         for i, entry in enumerate(words):
             if entry.get("entry", {}).get("id") == entry_id:
                 self.dictionary_data["words"][i] = entry_data
                 break
-        
+
         # 相手方に逆方向の関連語を追加
         dialog.apply_reciprocal_relations()
 
-        # changelogに追記
-        self._add_changelog_entry("CHANGE", form)
+        # changelogに追記（見出し語が変わった場合は旧称を記録）
+        details = f"旧: {old_form}" if old_form != form else ""
+        self._add_changelog_entry("CHANGE", form, details)
         
         # 変更フラグを立てる
         self._mark_as_modified()
