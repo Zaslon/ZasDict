@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QListWidget, QTextEdit, QTextBrowser, QMenuBar, QMenu, QFileDialog,
     QDialog, QLabel, QPushButton, QSpinBox, QFontComboBox, QMessageBox, QCheckBox, QTabWidget
 )
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor, QFontMetrics
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QTextCursor, QFontMetrics, QTextDocument, QPalette
 from PySide6.QtCore import QObject, Signal, Slot, QThread, Qt, QMetaObject, Q_ARG, QSettings
 import os
 import sys
@@ -214,6 +214,30 @@ class PreferencesDialog(QDialog):
 
 
 # ============================================================================
+# カスタムテキストブラウザ（関連語リンク対応）
+# ============================================================================
+
+class DetailBrowser(QTextBrowser):
+    """word:///ID 形式のリンクをシグナルに変換するテキストブラウザ。
+
+    Qt6 では setSource の代わりに doSetSource が仮想関数になっているため
+    doSetSource をオーバーライドする。URL はパス部分に ID を置く形式
+    （word:///123）にすることで Qt の IP アドレス正規化を回避する。
+    """
+
+    word_link_clicked = Signal(int)
+
+    def doSetSource(self, url, type=QTextDocument.ResourceType.UnknownResource):
+        if url.scheme() == "word":
+            try:
+                self.word_link_clicked.emit(int(url.path().strip("/")))
+            except ValueError:
+                pass
+        else:
+            super().doSetSource(url, type)
+
+
+# ============================================================================
 # メインウィンドウ
 # ============================================================================
 
@@ -394,9 +418,10 @@ class DictionaryApp(QMainWindow):
         self.result_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.result_list.customContextMenuRequested.connect(self._on_result_right_click)
         
-        self.detail_view = QTextBrowser()
+        self.detail_view = DetailBrowser()
         self.detail_view.setFont(self.default_font)
-        
+        self.detail_view.word_link_clicked.connect(self._on_detail_link_clicked)
+
         layout.addWidget(self.result_list, 1)
         layout.addWidget(self.detail_view, 2)
 
@@ -800,6 +825,26 @@ class DictionaryApp(QMainWindow):
         self.result_list.clear()
         self.result_list.addItems(labels)
     
+    def _load_detail_css(self) -> str:
+        """detail.css を読み込む"""
+        css_path = os.path.join(self.base_path, "detail.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def _display_entry_detail(self, entry: Dict):
+        """エントリ詳細を detail_view に表示"""
+        detail_text = self._format_entry_detail(entry)
+        css = self._load_detail_css()
+        bg = QApplication.palette().color(QPalette.ColorRole.Window)
+        theme = "dark" if bg.lightness() < 128 else "light"
+        html = f"<html><head><style>{css}</style></head><body class='{theme}'>{detail_text}</body></html>"
+        self.detail_view.setHtml(html)
+
+    def _on_detail_link_clicked(self, entry_id: int):
+        """詳細ビューの関連語リンクをクリックした時の処理"""
+        if entry_id in self.id_map:
+            self._display_entry_detail(self.id_map[entry_id])
+
     def show_detail(self, selected_text: str):
         """詳細を表示"""
         if not selected_text:
@@ -807,26 +852,8 @@ class DictionaryApp(QMainWindow):
             return
 
         current_index = self.result_list.currentRow()
-
         if 0 <= current_index < len(self.result_entries):
-            entry = self.result_entries[current_index]
-            detail_text = self._format_entry_detail(entry)
-
-            # detail.css を読み込む
-            css_path = os.path.join(self.base_path, "detail.css")
-            with open(css_path, "r", encoding="utf-8") as f:
-                css = f.read()
-
-            # CSS を HTML に埋め込む
-            html = f"""
-            <html>
-            <head><style>{css}</style></head>
-            <body>{detail_text}</body>
-            </html>
-            """
-
-            self.detail_view.setHtml(html)
-            # self.detail_view.setPlainText(html)
+            self._display_entry_detail(self.result_entries[current_index])
     
     @staticmethod
     def _format_entry_detail(entry: Dict) -> str:
@@ -873,16 +900,21 @@ class DictionaryApp(QMainWindow):
         relation_map = {}
         for rel in entry.get("relations", []):
             title = rel.get("title", "")
-            text = rel.get("entry", {}).get("form", "")
+            rel_entry = rel.get("entry", {})
+            form = rel_entry.get("form", "")
+            entry_id = rel_entry.get("id")
             if title not in relation_map:
                 relation_map[title] = []
-            relation_map[title].append(text)
+            if entry_id is not None:
+                relation_map[title].append(f'<a href="word:///{entry_id}">{form}</a>')
+            else:
+                relation_map[title].append(form)
 
         # relations が存在するときだけ追加
         if relation_map:
             lines.append("<div class='relations'>")
-            for title, forms in relation_map.items():
-                joined = ", ".join(forms)
+            for title, links in relation_map.items():
+                joined = ", ".join(links)
                 lines.append(f"【{title}】{joined}")
             lines.append("</div>")
 

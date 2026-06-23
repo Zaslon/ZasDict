@@ -10,3 +10,15 @@
 div{
     margin-top: 10px;
 }
+
+a {
+    text-decoration: none;
+}
+
+body.light a {
+    color: #2255aa;
+}
+
+body.dark a {
+    color: #7ab3f5;
+}
