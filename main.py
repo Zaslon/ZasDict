@@ -28,6 +28,7 @@ from ipa import ipaToSpell
 from changelog import ChangelogViewerWidget
 from editor import EntryEditorDialog
 from legend import LegendViewerWidget
+from examples import ExamplesViewerWidget
 
 # ============================================================================
 # 環境設定ダイアログ
@@ -447,6 +448,7 @@ class DictionaryApp(QMainWindow):
         tools_menu.addAction(self._create_action("変換", lambda: MultiToolsWidget.open("変換")))
         tools_menu.addAction(self._create_action("IPA", lambda: MultiToolsWidget.open("IPA")))
         tools_menu.addAction(self._create_action("凡例", self.open_legend))
+        tools_menu.addAction(self._create_action("例文", self.open_examples_viewer))
 
         # 設定メニュー
         settings_menu = menu_bar.addMenu("設定")
@@ -730,7 +732,31 @@ class DictionaryApp(QMainWindow):
         """凡例ウィジェットを開く"""
         self.legend_widget = LegendViewerWidget(self.dictionary_data)
         self.legend_widget.show()
-    
+
+    def open_examples_viewer(self):
+        """例文ビューア・エディタを開く"""
+        if not self.dictionary_data:
+            QMessageBox.warning(
+                self,
+                "辞書未読込",
+                "先に辞書ファイルを開いてください。"
+            )
+            return
+        tmp = QLineEdit()
+        self._idyer_font_select(tmp)
+        sentence_font = tmp.font()
+        self.examples_widget = ExamplesViewerWidget(
+            self.dictionary_data, self.search_index, self.id_map,
+            sentence_font=sentence_font
+        )
+        self.examples_widget.changed.connect(self._on_examples_changed)
+        self.examples_widget.show()
+
+    def _on_examples_changed(self):
+        """例文が変更されたときの処理"""
+        self._mark_as_modified()
+        self._auto_save_if_enabled()
+
     def open_dictionary_settings(self):
         """辞書依存設定ダイアログを開く"""
         if not self.dictionary_data:
