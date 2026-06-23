@@ -526,15 +526,12 @@ class EntryEditorDialog(QDialog):
 
         self.content_widgets = {}
         self.toggle_buttons = {}
-
-        # トグルボタン行
-        toggle_layout = QHBoxLayout()
-        main_layout.addLayout(toggle_layout)  # スクロール外に置く
+        self.add_buttons = {}  # collapsible ウィジェット用の「追加」ボタン
 
         self._add_content_input_widget(const.PRONUNCIATION_TITLE, 1, 1)
         self._add_content_input_widget("語法", 2, 5)
-        self._add_content_input_widget("文化", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
-        self._add_content_input_widget("用例", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
+        self._add_content_input_widget("文化", 2, 5, collapsible=True, default_visible=False)
+        self._add_content_input_widget("用例", 2, 5, collapsible=True, default_visible=False)
         self._add_content_input_widget("語源", 1, 1)
 
         self.scroll_layout.addWidget(QLabel("関連語:"))
@@ -571,11 +568,12 @@ class EntryEditorDialog(QDialog):
         self.setLayout(main_layout)
 
     def _add_content_input_widget(self, label, min_lines=1, max_lines=3,
-                                toggleable=False, toggle_layout=None, default_visible=True):
+                                collapsible=False, default_visible=True):
         """
         コンテンツ欄の表示と連想配列を作る。
         最小最大がともに1の場合、QLineEditに自動で変更する。
-        togglableをTrueにすると、表示/日表示切替ボタンをtoggle_layoutに表示する。
+        collapsibleをTrueにすると、スクロール内に「＋ XXを追加」ボタンを表示し、
+        クリック時にコンテンツ欄を表示する。
         """
         container = QWidget()
         layout = QVBoxLayout()
@@ -593,26 +591,23 @@ class EntryEditorDialog(QDialog):
         layout.addWidget(widget)
         self.content_inputs[label] = widget
         self.content_widgets[label] = container
-        self.scroll_layout.addWidget(container)
 
-        if toggleable and toggle_layout is not None:
-            btn = QPushButton(f"{label} を{'非表示' if default_visible else '表示'}")
-            btn.setCheckable(True)
-            btn.setChecked(not default_visible)
-            toggle_layout.addWidget(btn)
-            self.toggle_buttons[label] = btn
+        if collapsible and not default_visible:
+            add_btn = QPushButton(f"＋ {label}を追加")
+            self.add_buttons[label] = add_btn
+            self.scroll_layout.addWidget(add_btn)
+            self.scroll_layout.addWidget(container)
+            container.setVisible(False)
 
-            container.setVisible(default_visible)
+            def make_show(w, b):
+                def show():
+                    w.setVisible(True)
+                    b.setVisible(False)
+                return show
 
-            def make_toggle(lbl, w, b):
-                def toggle():
-                    visible = not w.isVisible()
-                    w.setVisible(visible)
-                    b.setText(f"{lbl} を{'非表示' if visible else '表示'}")
-                    b.setChecked(not visible)
-                return toggle
-
-            btn.clicked.connect(make_toggle(label, container, btn))
+            add_btn.clicked.connect(make_show(container, add_btn))
+        else:
+            self.scroll_layout.addWidget(container)
 
         return container
     
@@ -792,12 +787,11 @@ class EntryEditorDialog(QDialog):
                 if text:
                     loaded_titles.add(title)
 
-        # トグル対象のラベルについて、データがあれば表示・なければ非表示にする
-        for label, btn in self.toggle_buttons.items():
+        # collapsible ウィジェットについて、データがあれば展開・なければ折りたたむ
+        for label, add_btn in self.add_buttons.items():
             has_content = label in loaded_titles
             self.content_widgets[label].setVisible(has_content)
-            btn.setText(f"{label} を{'非表示' if has_content else '表示'}")
-            btn.setChecked(not has_content)
+            add_btn.setVisible(not has_content)
 
         # 関連語
         relations = self.existing_entry.get("relations", [])
