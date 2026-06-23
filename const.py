@@ -20,6 +20,9 @@ SEARCH_SCOPES = ["見出し語・訳語", "全文"]
 IDYER_FONT_REGULAR = "Fazik-regular.ttf"
 IDYER_FONT_BOLD = "Fazik-bold.ttf"
 
+PRONUNCIATION_TITLE = "発音記号"
+CONTENT_TYPES = ["語法", "文化", "用例", "語源"]
+
 # 品詞の選択肢（バリデーション用）
 VALID_POS = [
     "名詞",        # 通常名詞・複合名詞

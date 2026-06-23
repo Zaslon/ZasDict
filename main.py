@@ -277,6 +277,8 @@ class DictionaryApp(QMainWindow):
 
         self.last_file = self._read_ini("last_dictionary", "",      group=self.pc_name)
         self.auto_save = self._read_ini("auto_save",       "false", group=self.pc_name)
+        self.saved_search_mode  = self._read_ini("search_mode",  const.SEARCH_MODES[0],  group=self.pc_name)
+        self.saved_search_scope = self._read_ini("search_scope", const.SEARCH_SCOPES[0], group=self.pc_name)
         
         self.resize(width, height)
         self.default_font = QFont(font_family, self.font_size)
@@ -362,10 +364,12 @@ class DictionaryApp(QMainWindow):
 
         self.search_mode = QComboBox()
         self.search_mode.addItems(const.SEARCH_MODES)
+        self.search_mode.setCurrentText(self.saved_search_mode)
         self.search_mode.currentTextChanged.connect(self._on_search_options_changed)
-        
+
         self.search_scope = QComboBox()
         self.search_scope.addItems(const.SEARCH_SCOPES)
+        self.search_scope.setCurrentText(self.saved_search_scope)
         self.search_scope.currentTextChanged.connect(self._on_search_options_changed)
 
         # コンボボックスの推奨される高さに合わせる
@@ -751,6 +755,10 @@ class DictionaryApp(QMainWindow):
     
     def _on_search_options_changed(self):
         """検索オプション（モード・スコープ）変更時の処理"""
+        self._write_ini({
+            "search_mode":  self.search_mode.currentText(),
+            "search_scope": self.search_scope.currentText(),
+        }, group=self.pc_name)
         text = self.search_input.text()
         if text:
             self.update_results(text)
@@ -835,7 +843,7 @@ class DictionaryApp(QMainWindow):
         # --- 発音記号 ---
         pron = None
         for content in entry.get("contents", []):
-            if content.get("title") == "発音記号" and content.get("text"):
+            if content.get("title") == const.PRONUNCIATION_TITLE and content.get("text"):
                 pron = content['text']
                 break
         if pron:
@@ -854,7 +862,7 @@ class DictionaryApp(QMainWindow):
 
         # --- contents（発音記号以外） ---
         for content in entry.get("contents", []):
-            if content.get("title") != "発音記号":
+            if content.get("title") != const.PRONUNCIATION_TITLE:
                 lines.append("<div class='contents'>")
                 title = content.get("title", "")
                 text = content.get("text", "")

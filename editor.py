@@ -151,6 +151,52 @@ class RelationWidget(QWidget):
         self.selected_entry_id = entry_id
         self.selected_label.setText(form)
 
+class VariationWidget(QWidget):
+    """変化形（バリエーション）のセット"""
+
+    remove_requested = Signal(object)
+
+    def __init__(self, removable=True, parent=None):
+        super().__init__(parent)
+        self.removable = removable
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("種別（例: 過去形）")
+        self.title_input.setMaximumWidth(150)
+
+        self.form_input = QLineEdit()
+        self.form_input.setPlaceholderText("変化形")
+
+        layout.addWidget(QLabel("種別:"))
+        layout.addWidget(self.title_input)
+        layout.addWidget(QLabel("形:"))
+        layout.addWidget(self.form_input)
+
+        if self.removable:
+            self.remove_btn = QPushButton("－")
+            self.remove_btn.setMaximumWidth(30)
+            self.remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+            layout.addWidget(self.remove_btn)
+
+        self.setLayout(layout)
+
+    def get_data(self) -> Optional[Dict]:
+        title = self.title_input.text().strip()
+        form = self.form_input.text().strip()
+        if not title and not form:
+            return None
+        return {"title": title, "form": form}
+
+    def set_data(self, title: str, form: str):
+        self.title_input.setText(title)
+        self.form_input.setText(form)
+
+
 class WordSelectDialog(QDialog):
     """単語選択ダイアログ"""
     
@@ -342,7 +388,8 @@ class EntryEditorDialog(QDialog):
         
         self.translation_widgets = []
         self.relation_widgets = []
-        
+        self.variation_widgets = []
+
         self.content_inputs = {}
         
         title = "単語編集" if self.is_edit_mode else "新規単語登録"
@@ -484,7 +531,7 @@ class EntryEditorDialog(QDialog):
         toggle_layout = QHBoxLayout()
         main_layout.addLayout(toggle_layout)  # スクロール外に置く
 
-        self._add_content_input_widget("発音記号", 1, 1)
+        self._add_content_input_widget(const.PRONUNCIATION_TITLE, 1, 1)
         self._add_content_input_widget("語法", 2, 5)
         self._add_content_input_widget("文化", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
         self._add_content_input_widget("用例", 2, 5, toggleable=True, toggle_layout=toggle_layout, default_visible=False)
@@ -496,6 +543,18 @@ class EntryEditorDialog(QDialog):
         self.add_rel_btn.clicked.connect(lambda: self._add_relation(removable=True))
         self.scroll_layout.addLayout(self.relation_container)
         self.scroll_layout.addWidget(self.add_rel_btn)
+
+        self.scroll_layout.addWidget(QLabel("変化形:"))
+        self.variation_container = QVBoxLayout()
+        self.add_var_btn = QPushButton("＋ 変化形を追加")
+        self.add_var_btn.clicked.connect(lambda: self._add_variation(removable=True))
+        self.scroll_layout.addLayout(self.variation_container)
+        self.scroll_layout.addWidget(self.add_var_btn)
+
+        self.scroll_layout.addWidget(QLabel("タグ（,区切り）:"))
+        self.tags_input = QLineEdit()
+        self.tags_input.setPlaceholderText("例: 名詞,語彙")
+        self.scroll_layout.addWidget(self.tags_input)
 
         self.scroll_layout.addStretch()
 
@@ -601,7 +660,20 @@ class EntryEditorDialog(QDialog):
         """関連語セットを削除"""
         self.relation_widgets.remove(widget)
         widget.deleteLater()
-    
+
+    def _add_variation(self, removable=True) -> "VariationWidget":
+        """変化形セットを追加"""
+        widget = VariationWidget(removable=removable, parent=self)
+        widget.remove_requested.connect(self._remove_variation)
+        self.variation_widgets.append(widget)
+        self.variation_container.addWidget(widget)
+        return widget
+
+    def _remove_variation(self, widget):
+        """変化形セットを削除"""
+        self.variation_widgets.remove(widget)
+        widget.deleteLater()
+
     def _create_content(self, title: str, widget) -> Optional[Dict]:
         """テキストウィジェットからコンテンツを作成。
         空欄の場合は追加しない。"""
@@ -641,19 +713,27 @@ class EntryEditorDialog(QDialog):
             for title, widget in self.content_inputs.items()
         ]
         contents = [c for c in contents if c]
-        
+
+        # バリエーション
+        variations = [w.get_data() for w in self.variation_widgets]
+        variations = [v for v in variations if v is not None]
+
+        # タグ
+        raw_tags = self.tags_input.text()
+        tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+
         entry_data = {
             "entry": {
                 "id": entry_id,
                 "form": self.form_input.text().strip()
             },
             "translations": translations,
-            "tags": [],
+            "tags": tags,
             "contents": contents,
-            "variations": [],
+            "variations": variations,
             "relations": unique_relations
         }
-        
+
         return entry_data
     
     def _generate_unique_id(self) -> int:
@@ -732,3 +812,16 @@ class EntryEditorDialog(QDialog):
                 rel_entry_id,
                 rel_form
             )
+
+        # バリエーション
+        for var in self.existing_entry.get("variations", []):
+            self._add_variation(removable=True)
+            self.variation_widgets[-1].set_data(
+                var.get("title", ""),
+                var.get("form", "")
+            )
+
+        # タグ
+        tags = self.existing_entry.get("tags", [])
+        if tags:
+            self.tags_input.setText(", ".join(tags))
