@@ -861,6 +861,11 @@ class DictionaryApp(QMainWindow):
         """エントリ詳細を detail_view に表示"""
         detail_text = self._format_entry_detail(entry)
         css = self._load_detail_css()
+
+        # Heksa有効時は見出し語にイジェール語フォントを適用
+        if self.is_idyer_font and self._idyer_font:
+            css += f"\n.form {{ font-family: '{self._idyer_font}'; }}"
+
         bg = QApplication.palette().color(QPalette.ColorRole.Window)
         theme = "dark" if bg.lightness() < 128 else "light"
         html = f"<html><head><style>{css}</style></head><body class='{theme}'>{detail_text}</body></html>"
