@@ -46,6 +46,26 @@ VALID_RELATIONS = [
         "類義語","対義語","上位語","下位語","関連","参照","省略","同意"
 ]
 
+# 例文集カタログ
+# 各要素は (APIキー名, 表示名) のタプル。「自作」は末尾に固定
+EXAMPLE_CATALOG_SELF = "自作"
+EXAMPLE_CATALOG_OPTIONS = [
+    ("zpdicDaily",    "zpdicDaily — 今日の例文"),
+    ("appleAlpha",    "appleAlpha — リンゴを食べたい 58 文"),
+    ("appleBeta",     "appleBeta — リンゴを食べ足りない 57 文"),
+    ("appleGamma",    "appleGamma — リンゴをもっと食べたい 55 文"),
+    ("survival",      "survival — 今日を生き抜く実用例文"),
+    ("weaving",       "weaving — 手袋と辞書を編む 50 文"),
+    ("shaleianAlpha", "shaleianAlpha — 今日のシャレイア語 I"),
+    ("shaleianBeta",  "shaleianBeta — 今日のシャレイア語 II"),
+    ("meat",          "meat — 古代の民族のためのお肉例文"),
+    ("arithmetic",    "arithmetic — 算数例文"),
+    ("adposition",    "adposition — 格や接置詞のための例文集"),
+    (EXAMPLE_CATALOG_SELF, EXAMPLE_CATALOG_SELF),
+]
+
+ZPDIC_API_BASE = "https://zpdic.ziphil.com/api/v0"
+
 # 関係の対照関係
 RECIPROCAL_MAP = {
     "類義語": "類義語",

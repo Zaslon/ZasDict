@@ -2,13 +2,125 @@
 ZasDict - 例文ビューア・エディタ
 """
 
+import os
+import json
+import http.client
+import ssl
+import urllib.parse
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QListWidget,
     QLineEdit, QPlainTextEdit, QLabel, QPushButton, QSpinBox,
-    QScrollArea, QDialog, QMessageBox, QApplication
+    QScrollArea, QDialog, QMessageBox, QApplication, QComboBox
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QThread
 from typing import Dict, List, Optional
+
+import const
+
+# APIキーの保存先（プロジェクト外のユーザーホームディレクトリ）
+_API_KEY_PATH = os.path.join(os.path.expanduser("~"), ".zasdict", "api_key")
+
+
+def _load_api_key() -> Optional[str]:
+    try:
+        with open(_API_KEY_PATH, "r", encoding="utf-8-sig") as f:  # utf-8-sig strips BOM
+            return f.read().strip() or None
+    except FileNotFoundError:
+        return None
+
+
+def _save_api_key(key: str):
+    os.makedirs(os.path.dirname(_API_KEY_PATH), exist_ok=True)
+    with open(_API_KEY_PATH, "w", encoding="utf-8") as f:
+        f.write(key)
+
+
+class ApiKeyDialog(QDialog):
+    """ZpDIC APIキー入力ダイアログ"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("APIキーの設定")
+        self.resize(440, 160)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("ZpDIC Online のAPIキーを入力してください:"))
+
+        self.key_input = QLineEdit()
+        self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.key_input.setPlaceholderText("APIキー")
+        layout.addWidget(self.key_input)
+
+        note = QLabel(
+            f"保存先: {_API_KEY_PATH}\n"
+            "（プロジェクトフォルダ外のため、Git管理外です）"
+        )
+        note.setStyleSheet("color: gray; font-size: 9pt;")
+        layout.addWidget(note)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("キャンセル")
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+
+    def get_key(self) -> str:
+        return self.key_input.text().strip()
+
+
+class OnlineFetchThread(QThread):
+    """ZpDIC例文API照会スレッド"""
+
+    result = Signal(dict)
+
+    def __init__(self, catalog: str, number: int, api_key: str, parent=None):
+        super().__init__(parent)
+        self.catalog = catalog
+        self.number = number
+        self.api_key = api_key
+
+    def run(self):
+        # HTTP ヘッダーは latin-1 制限があるため ASCII のみ許可
+        if not self.api_key.isascii():
+            self.result.emit({"ok": False, "error": "api_key_non_ascii"})
+            return
+
+        # カタログ名をパーセントエンコード（非ASCII対策）
+        catalog_encoded = urllib.parse.quote(self.catalog, safe="")
+        path = f"/api/v0/exampleOffer/{catalog_encoded}/{self.number}"
+
+        ctx = ssl.create_default_context()
+        conn = http.client.HTTPSConnection("zpdic.ziphil.com", context=ctx, timeout=10)
+        try:
+            conn.request("GET", path, headers={"X-Api-Key": self.api_key})
+            resp = conn.getresponse()
+            body = resp.read()
+            if resp.status == 200:
+                data = json.loads(body.decode("utf-8"))
+                self.result.emit({"ok": True, "data": data.get("exampleOffer", {})})
+            elif resp.status == 400:
+                self.result.emit({"ok": False, "error": "bad_request"})
+            elif resp.status == 401:
+                self.result.emit({"ok": False, "error": "auth_failed"})
+            elif resp.status == 404:
+                self.result.emit({"ok": False, "error": "not_found"})
+            elif resp.status == 429:
+                self.result.emit({"ok": False, "error": "rate_limit"})
+            else:
+                self.result.emit({"ok": False, "error": f"HTTP {resp.status}"})
+        except Exception as e:
+            self.result.emit({"ok": False, "error": str(e)})
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 class LinkedWordWidget(QWidget):
@@ -23,7 +135,6 @@ class LinkedWordWidget(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # self.label = QLabel(f"#{entry_id} {form}")
         self.label = QLabel(f"{form}")
         remove_btn = QPushButton("－")
         remove_btn.setMaximumWidth(30)
@@ -54,6 +165,8 @@ class ExamplesViewerWidget(QWidget):
         self.linked_word_widgets: List[LinkedWordWidget] = []
         self._editing_new = False
         self._new_id: Optional[int] = None
+        self._form_enabled = False
+        self._fetch_thread: Optional[OnlineFetchThread] = None
 
         self.setWindowTitle("例文")
         self.resize(820, 520)
@@ -65,7 +178,7 @@ class ExamplesViewerWidget(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
 
-        # 左ペイン: 検索 + リスト
+        # ---- 左ペイン: 検索 + リスト ----
         left_widget = QWidget()
         left_layout = QVBoxLayout()
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -83,7 +196,7 @@ class ExamplesViewerWidget(QWidget):
 
         left_widget.setLayout(left_layout)
 
-        # 右ペイン: 編集フォーム
+        # ---- 右ペイン: 編集フォーム ----
         right_outer = QWidget()
         right_outer_layout = QVBoxLayout()
         right_outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -133,16 +246,34 @@ class ExamplesViewerWidget(QWidget):
         add_word_btn.clicked.connect(self._add_linked_word)
         form_layout.addWidget(add_word_btn)
 
-        offer_layout = QHBoxLayout()
-        offer_layout.addWidget(QLabel("出典:"))
-        self.offer_catalog_input = QLineEdit()
-        self.offer_catalog_input.setPlaceholderText("カタログ名")
-        offer_layout.addWidget(self.offer_catalog_input)
-        offer_layout.addWidget(QLabel("No."))
+        # ---- 出典セクション ----
+        offer_row = QHBoxLayout()
+        offer_row.addWidget(QLabel("出典:"))
+        self.offer_catalog_combo = QComboBox()
+        for _, display in const.EXAMPLE_CATALOG_OPTIONS:
+            self.offer_catalog_combo.addItem(display)
+        self.offer_catalog_combo.currentIndexChanged.connect(self._on_offer_catalog_changed)
+        offer_row.addWidget(self.offer_catalog_combo)
+        offer_row.addWidget(QLabel("No."))
         self.offer_number_spin = QSpinBox()
         self.offer_number_spin.setRange(0, 999999)
-        offer_layout.addWidget(self.offer_number_spin)
-        form_layout.addLayout(offer_layout)
+        offer_row.addWidget(self.offer_number_spin)
+        self.offer_fetch_btn = QPushButton("照会")
+        self.offer_fetch_btn.setEnabled(False)
+        self.offer_fetch_btn.clicked.connect(self._fetch_offer_example)
+        offer_row.addWidget(self.offer_fetch_btn)
+        form_layout.addLayout(offer_row)
+
+        # 照会ステータス行
+        status_row = QHBoxLayout()
+        self.offer_status_label = QLabel("")
+        self.offer_status_label.setWordWrap(True)
+        status_row.addWidget(self.offer_status_label, 1)
+        api_key_btn = QPushButton("APIキー設定")
+        api_key_btn.setFixedWidth(90)
+        api_key_btn.clicked.connect(self._change_api_key)
+        status_row.addWidget(api_key_btn)
+        form_layout.addLayout(status_row)
 
         form_layout.addStretch()
 
@@ -173,13 +304,126 @@ class ExamplesViewerWidget(QWidget):
         self.setLayout(main_layout)
         self._set_form_enabled(False)
 
+    # ----------------------------------------------------------------
+    # カタログ名ヘルパー（currentData/findData に頼らずインデックスで解決）
+    # ----------------------------------------------------------------
+
+    def _current_catalog_api(self) -> str:
+        idx = self.offer_catalog_combo.currentIndex()
+        if 0 <= idx < len(const.EXAMPLE_CATALOG_OPTIONS):
+            return const.EXAMPLE_CATALOG_OPTIONS[idx][0]
+        return const.EXAMPLE_CATALOG_SELF
+
+    def _find_catalog_index(self, api_name: str) -> int:
+        for i, (name, _) in enumerate(const.EXAMPLE_CATALOG_OPTIONS):
+            if name == api_name:
+                return i
+        return -1
+
+    # ----------------------------------------------------------------
+    # 出典照会
+    # ----------------------------------------------------------------
+
+    def _on_offer_catalog_changed(self):
+        is_online = (self._current_catalog_api() != const.EXAMPLE_CATALOG_SELF)
+        self.offer_fetch_btn.setEnabled(self._form_enabled and is_online)
+        self.offer_status_label.setText("")
+
+    def _fetch_offer_example(self):
+        api_key = self._get_or_ask_api_key()
+        if not api_key:
+            return
+
+        number = self.offer_number_spin.value()
+        if number == 0:
+            self.offer_status_label.setText("番号を入力してください。")
+            return
+
+        catalog = self._current_catalog_api()
+        self.offer_fetch_btn.setEnabled(False)
+        self.offer_status_label.setText("照会中...")
+
+        self._fetch_thread = OnlineFetchThread(catalog, number, api_key, self)
+        self._fetch_thread.result.connect(self._on_offer_fetch_result)
+        self._fetch_thread.start()
+
+    def _on_offer_fetch_result(self, result: dict):
+        is_online = (self._current_catalog_api() != const.EXAMPLE_CATALOG_SELF)
+        self.offer_fetch_btn.setEnabled(self._form_enabled and is_online)
+
+        if result["ok"]:
+            data = result["data"]
+            self.translation_input.setPlainText(data.get("translation", ""))
+            self.supplement_input.setPlainText(data.get("supplement", ""))
+            author = data.get("author", "")
+            self.offer_status_label.setText(
+                f"照会成功（作者: {author}）" if author else "照会成功"
+            )
+        elif result["error"] == "bad_request":
+            self.offer_status_label.setText(
+                "HTTP 400: リクエストの内容が誤っています。"
+            )
+        elif result["error"] == "not_found":
+            self.offer_status_label.setText(
+                f"HTTP 404: No. {self.offer_number_spin.value()} の例文は存在しません。"
+            )
+            self.offer_number_spin.setValue(0)
+        elif result["error"] == "auth_failed":
+            self.offer_status_label.setText(
+                "HTTP 401: APIキーが正しくありません。「APIキー設定」から再設定してください。"
+            )
+            try:
+                os.remove(_API_KEY_PATH)
+            except FileNotFoundError:
+                pass
+        elif result["error"] == "rate_limit":
+            self.offer_status_label.setText(
+                "HTTP 429: 呼び出し回数の上限に達しています。"
+            )
+        elif result["error"] == "api_key_non_ascii":
+            self.offer_status_label.setText(
+                "APIキーに使用できない文字が含まれています。「APIキー設定」から再設定してください。"
+            )
+            try:
+                os.remove(_API_KEY_PATH)
+            except FileNotFoundError:
+                pass
+        else:
+            self.offer_status_label.setText(f"エラー: {result['error']}")
+
+    def _get_or_ask_api_key(self) -> Optional[str]:
+        key = _load_api_key()
+        if key:
+            return key
+        dialog = ApiKeyDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            key = dialog.get_key()
+            if key:
+                _save_api_key(key)
+                return key
+        return None
+
+    def _change_api_key(self):
+        dialog = ApiKeyDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            key = dialog.get_key()
+            if key:
+                _save_api_key(key)
+
+    # ----------------------------------------------------------------
+    # フォーム操作
+    # ----------------------------------------------------------------
+
     def _set_form_enabled(self, enabled: bool):
+        self._form_enabled = enabled
         self.sentence_input.setEnabled(enabled)
         self.translation_input.setEnabled(enabled)
         self.supplement_input.setEnabled(enabled)
         self.tags_input.setEnabled(enabled)
-        self.offer_catalog_input.setEnabled(enabled)
+        self.offer_catalog_combo.setEnabled(enabled)
         self.offer_number_spin.setEnabled(enabled)
+        is_online = (self._current_catalog_api() != const.EXAMPLE_CATALOG_SELF)
+        self.offer_fetch_btn.setEnabled(enabled and is_online)
         self.save_btn.setEnabled(enabled)
         self.delete_btn.setEnabled(enabled and not self._editing_new)
 
@@ -216,8 +460,10 @@ class ExamplesViewerWidget(QWidget):
         self.translation_input.clear()
         self.supplement_input.clear()
         self.tags_input.clear()
-        self.offer_catalog_input.clear()
+        idx = self._find_catalog_index(const.EXAMPLE_CATALOG_SELF)
+        self.offer_catalog_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self.offer_number_spin.setValue(0)
+        self.offer_status_label.setText("")
         self._clear_linked_words()
 
     def _clear_linked_words(self):
@@ -242,8 +488,15 @@ class ExamplesViewerWidget(QWidget):
         self.tags_input.setText(", ".join(ex.get("tags", [])))
 
         offer = ex.get("offer", {})
-        self.offer_catalog_input.setText(offer.get("catalog", ""))
+        catalog = offer.get("catalog", "")
+        idx = self._find_catalog_index(catalog)
+        if idx >= 0:
+            self.offer_catalog_combo.setCurrentIndex(idx)
+        else:
+            idx = self._find_catalog_index(const.EXAMPLE_CATALOG_SELF)
+            self.offer_catalog_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self.offer_number_spin.setValue(offer.get("number", 0))
+        self.offer_status_label.setText("")
 
         self._clear_linked_words()
         for word_ref in ex.get("words", []):
@@ -287,7 +540,7 @@ class ExamplesViewerWidget(QWidget):
         tags = [t.strip() for t in self.tags_input.text().split(",") if t.strip()]
         words = [{"id": w.get_id()} for w in self.linked_word_widgets]
         offer = {
-            "catalog": self.offer_catalog_input.text().strip(),
+            "catalog": self._current_catalog_api(),
             "number": self.offer_number_spin.value()
         }
         return {
@@ -312,7 +565,6 @@ class ExamplesViewerWidget(QWidget):
             self._editing_new = False
             self._new_id = None
             self._reload_list()
-            # リストの末尾（追加した項目）を選択
             self.example_list.blockSignals(True)
             self.example_list.setCurrentRow(self.example_list.count() - 1)
             self.example_list.blockSignals(False)
