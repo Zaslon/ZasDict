@@ -248,6 +248,7 @@ class LinkedWordWidget(QWidget):
     """関連単語の表示・削除ウィジェット"""
 
     remove_requested = Signal(object)
+    word_link_clicked = Signal(int)
 
     def __init__(self, entry_id: int, form: str, parent=None):
         super().__init__(parent)
@@ -256,7 +257,11 @@ class LinkedWordWidget(QWidget):
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.label = QLabel(f"{form}")
+        self.label = QPushButton(form)
+        self.label.setFlat(True)
+        self.label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.label.setStyleSheet("text-decoration: underline; text-align: left; padding: 0px;")
+        self.label.clicked.connect(lambda: self.word_link_clicked.emit(self.entry_id))
         remove_btn = QPushButton("－")
         remove_btn.setMaximumWidth(30)
         remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
@@ -274,6 +279,7 @@ class ExampleEditDialog(QDialog):
 
     saved = Signal(dict)
     deleted = Signal()
+    show_word_requested = Signal(int)
 
     def __init__(self, dictionary_data: Dict, search_index: Dict, id_map: Dict,
                  sentence_font=None, example: Optional[Dict] = None, parent=None):
@@ -593,6 +599,7 @@ class ExampleEditDialog(QDialog):
     def _add_linked_word_widget(self, entry_id: int, form: str):
         widget = LinkedWordWidget(entry_id, form, self)
         widget.remove_requested.connect(self._remove_linked_word)
+        widget.word_link_clicked.connect(self.show_word_requested)
         self.words_container.addWidget(widget)
         self.linked_word_widgets.append(widget)
 
@@ -653,6 +660,7 @@ class ExamplesViewerWidget(QWidget):
     """例文ビューア（閲覧専用リスト）"""
 
     changed = Signal()
+    show_word_in_dict = Signal(int)
 
     def __init__(self, dictionary_data: Dict, search_index: Dict, id_map: Dict,
                  sentence_font=None, parent=None):
@@ -772,6 +780,7 @@ class ExamplesViewerWidget(QWidget):
 
         dialog.saved.connect(on_saved)
         dialog.deleted.connect(on_deleted)
+        dialog.show_word_requested.connect(self.show_word_in_dict)
         dialog.finished.connect(lambda _: self._open_dialogs.discard(dialog))
         self._open_dialogs.add(dialog)
         dialog.show()

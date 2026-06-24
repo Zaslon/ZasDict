@@ -750,12 +750,20 @@ class DictionaryApp(QMainWindow):
             sentence_font=sentence_font
         )
         self.examples_widget.changed.connect(self._on_examples_changed)
+        self.examples_widget.show_word_in_dict.connect(self._on_show_word_in_dict)
         self.examples_widget.show()
 
     def _on_examples_changed(self):
         """例文が変更されたときの処理"""
         self._mark_as_modified()
         self._auto_save_if_enabled()
+
+    def _on_show_word_in_dict(self, entry_id: int):
+        """例文画面の関連語クリック時に辞書のdetail_viewへ表示"""
+        if entry_id in self.id_map:
+            self._display_entry_detail(self.id_map[entry_id])
+            self.raise_()
+            self.activateWindow()
 
     def open_dictionary_settings(self):
         """辞書依存設定ダイアログを開く"""
