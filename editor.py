@@ -258,8 +258,8 @@ class WordSelectDialog(QDialog):
         cancel_btn = QPushButton("キャンセル")
         ok_btn.clicked.connect(self._on_ok)
         cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(ok_btn)
-        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(ok_btn, 1)
+        button_layout.addWidget(cancel_btn, 1)
         
         layout.addLayout(search_layout)
         layout.addWidget(splitter)
@@ -560,8 +560,8 @@ class EntryEditorDialog(QDialog):
         self.cancel_btn = QPushButton("キャンセル")
         self.ok_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(self.ok_btn)
-        button_layout.addWidget(self.cancel_btn)
+        button_layout.addWidget(self.ok_btn, 1)
+        button_layout.addWidget(self.cancel_btn, 1)
 
         main_layout.addWidget(scroll)
         main_layout.addLayout(button_layout)
@@ -577,6 +577,7 @@ class EntryEditorDialog(QDialog):
         """
         container = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         container.setLayout(layout)
         layout.addWidget(QLabel(f"{label}:"))
 
