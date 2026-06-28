@@ -358,7 +358,8 @@ class ExampleEditDialog(QDialog):
             self.offer_catalog_combo.addItem(display)
         self.offer_catalog_combo.currentIndexChanged.connect(self._on_offer_catalog_changed)
         offer_row.addWidget(self.offer_catalog_combo)
-        offer_row.addWidget(QLabel("No."))
+        self.offer_no_label = QLabel("No.")
+        offer_row.addWidget(self.offer_no_label)
         self.offer_number_spin = QSpinBox()
         self.offer_number_spin.setRange(0, 999999)
         offer_row.addWidget(self.offer_number_spin)
@@ -493,6 +494,8 @@ class ExampleEditDialog(QDialog):
         is_online = (self._current_catalog_api() != const.EXAMPLE_CATALOG_SELF)
         self.offer_fetch_btn.setEnabled(is_online)
         self.offer_status_label.setText("")
+        self.offer_no_label.setVisible(is_online)
+        self.offer_number_spin.setVisible(is_online)
 
     def _fetch_offer_example(self):
         api_key = self._get_or_ask_api_key()
@@ -796,6 +799,8 @@ class ExamplesViewerWidget(QWidget):
 
         def on_saved(data):
             data["id"] = new_id
+            if data.get("offer", {}).get("catalog") == const.EXAMPLE_CATALOG_SELF:
+                data["offer"]["number"] = new_id
             if "examples" not in self.dictionary_data:
                 self.dictionary_data["examples"] = []
             self.dictionary_data["examples"].append(data)
