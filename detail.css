@@ -22,3 +22,39 @@ body.light a {
 body.dark a {
     color: #7ab3f5;
 }
+
+.examples-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.example-item {
+    margin-top: 6px;
+    padding-left: 8px;
+    border-left: 3px solid #aaa;
+}
+
+.example-translation {
+    margin-top: 2px;
+}
+
+body.light .example-translation {
+    color: #555;
+}
+
+body.dark .example-translation {
+    color: #aaa;
+}
+
+.example-supplement {
+    margin-top: 2px;
+    font-style: italic;
+}
+
+body.light .example-supplement {
+    color: #777;
+}
+
+body.dark .example-supplement {
+    color: #888;
+}

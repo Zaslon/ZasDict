@@ -865,9 +865,18 @@ class DictionaryApp(QMainWindow):
         with open(css_path, "r", encoding="utf-8") as f:
             return f.read()
 
+    def _find_examples_for_entry(self, entry_id: int) -> List[Dict]:
+        """指定エントリIDを参照している例文を返す"""
+        return [
+            ex for ex in self.dictionary_data.get("examples", [])
+            if any(w.get("id") == entry_id for w in ex.get("words", []))
+        ]
+
     def _display_entry_detail(self, entry: Dict):
         """エントリ詳細を detail_view に表示"""
-        detail_text = self._format_entry_detail(entry)
+        entry_id = entry.get("entry", {}).get("id")
+        related_examples = self._find_examples_for_entry(entry_id) if entry_id is not None else []
+        detail_text = self._format_entry_detail(entry, related_examples)
         css = self._load_detail_css()
 
         # Heksa有効時は見出し語にイジェール語フォントを適用
@@ -895,7 +904,7 @@ class DictionaryApp(QMainWindow):
             self._display_entry_detail(self.result_entries[current_index])
     
     @staticmethod
-    def _format_entry_detail(entry: Dict) -> str:
+    def _format_entry_detail(entry: Dict, related_examples: List[Dict] = None) -> str:
         """指定フォーマットに従ってエントリ詳細をテキストとして出力する。"""
 
         lines = []
@@ -957,6 +966,22 @@ class DictionaryApp(QMainWindow):
                 lines.append(f"【{title}】{joined}")
             lines.append("</div>")
 
+        # --- related examples ---
+        if related_examples:
+            lines.append("<div class='examples'>")
+            lines.append("<div class='examples-title'>例文</div>")
+            for ex in related_examples:
+                sentence = ex.get("sentence", "")
+                translation = ex.get("translation", "")
+                supplement = ex.get("supplement", "")
+                lines.append("<div class='example-item'>")
+                lines.append(f"<div class='example-sentence'>{sentence}</div>")
+                if translation:
+                    lines.append(f"<div class='example-translation'>{translation}</div>")
+                if supplement:
+                    lines.append(f"<div class='example-supplement'>{supplement}</div>")
+                lines.append("</div>")
+            lines.append("</div>")
 
         return "\n".join(lines)
 
