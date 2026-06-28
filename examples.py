@@ -818,3 +818,14 @@ class ExamplesViewerWidget(QWidget):
         if not examples:
             return 1
         return max(e.get("id", 0) for e in examples) + 1
+
+    def open_edit_dialog_by_id(self, example_id: int):
+        """指定IDの例文の編集ダイアログを直接開く。検索フィルタ中は一旦クリアして検索する"""
+        if self.search_input.text():
+            self.search_input.clear()
+        for i, ex in enumerate(self.filtered_examples):
+            if ex.get("id") == example_id:
+                self.example_list.setCurrentRow(i)
+                self.example_list.scrollToItem(self.example_list.item(i))
+                self._open_edit_dialog(ex, i)
+                return

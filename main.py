@@ -227,11 +227,17 @@ class DetailBrowser(QTextBrowser):
     """
 
     word_link_clicked = Signal(int)
+    example_link_clicked = Signal(int)
 
     def doSetSource(self, url, type=QTextDocument.ResourceType.UnknownResource):
         if url.scheme() == "word":
             try:
                 self.word_link_clicked.emit(int(url.path().strip("/")))
+            except ValueError:
+                pass
+        elif url.scheme() == "example":
+            try:
+                self.example_link_clicked.emit(int(url.path().strip("/")))
             except ValueError:
                 pass
         else:
@@ -422,6 +428,7 @@ class DictionaryApp(QMainWindow):
         self.detail_view = DetailBrowser()
         self.detail_view.setFont(self.default_font)
         self.detail_view.word_link_clicked.connect(self._on_detail_link_clicked)
+        self.detail_view.example_link_clicked.connect(self._on_example_link_clicked)
 
         layout.addWidget(self.result_list, 1)
         layout.addWidget(self.detail_view, 2)
@@ -758,6 +765,15 @@ class DictionaryApp(QMainWindow):
         self._mark_as_modified()
         self._auto_save_if_enabled()
 
+    def _on_example_link_clicked(self, example_id: int):
+        """詳細ビューの参照例文クリック時に例文ウィンドウを開き編集ダイアログを直接表示"""
+        if not hasattr(self, 'examples_widget') or not self.examples_widget.isVisible():
+            self.open_examples_viewer()
+        else:
+            self.examples_widget.raise_()
+            self.examples_widget.activateWindow()
+        self.examples_widget.open_edit_dialog_by_id(example_id)
+
     def _on_show_word_in_dict(self, entry_id: int):
         """例文画面の関連語クリック時に辞書のdetail_viewへ表示"""
         if entry_id in self.id_map:
@@ -969,13 +985,17 @@ class DictionaryApp(QMainWindow):
         # --- related examples ---
         if related_examples:
             lines.append("<div class='examples'>")
-            lines.append("<div class='examples-title'>例文</div>")
+            lines.append("<div class='examples-title'>参照例文</div>")
             for ex in related_examples:
+                ex_id = ex.get("id")
                 sentence = ex.get("sentence", "")
                 translation = ex.get("translation", "")
                 supplement = ex.get("supplement", "")
                 lines.append("<div class='example-item'>")
-                lines.append(f"<div class='example-sentence'>{sentence}</div>")
+                if ex_id is not None:
+                    lines.append(f"<div class='example-sentence'><a href='example:///{ex_id}'>{sentence}</a></div>")
+                else:
+                    lines.append(f"<div class='example-sentence'>{sentence}</div>")
                 if translation:
                     lines.append(f"<div class='example-translation'>{translation}</div>")
                 if supplement:
